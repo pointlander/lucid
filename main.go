@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+
+	"github.com/pointlander/datum/iris"
 )
 
 const (
@@ -17,7 +19,8 @@ const (
 
 // Inputs is the input to the first layer
 type Inputs struct {
-	Inputs [4]float32
+	Inputs [][4]float32
+	Labels []int
 	Epoch  int64
 }
 
@@ -31,25 +34,31 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input) {
 	}
 	bias.Data = append(bias.Data, 0)
 	for input := range in {
-		i := NewMatrix(0, 4, 1)
-		i.Data = append(i.Data, input.Inputs[:]...)
-		output := Step(Add(MulT(weights, i), bias))
+		o := Input{
+			Input:  make([]float32, 3),
+			Labels: input.Labels,
+			Epoch:  input.Epoch,
+		}
+		for j := range input.Inputs {
+			i := NewMatrix(0, 4, 1)
+			i.Data = append(i.Data, input.Inputs[j][:]...)
+			output := Step(Add(MulT(weights, i), bias))
+			o.Input[j] = output.Data[0]
+		}
 		for j := range out {
-			out[j] <- Input{
-				Input: output.Data[0],
-				Epoch: input.Epoch,
-			}
+			out[j] <- o
 		}
 	}
 }
 
 // Input is the input into the second layer
 type Input struct {
-	Input float32
-	Epoch int64
+	Input  []float32
+	Labels []int
+	Epoch  int64
 }
 
-func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- float32) {
+func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input) {
 	rng := rand.New(rand.NewSource(seed))
 	weights := NewMatrix(0, Width, 1)
 	bias := NewMatrix(0, 1, 1)
@@ -59,12 +68,30 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- float32) {
 	}
 	bias.Data = append(bias.Data, 0)
 	for {
-		i := NewMatrix(0, Width, 1)
-		for _, in := range in {
-			i.Data = append(i.Data, (<-in).Input)
+		inputs := make([]Matrix, 3)
+		for i := range inputs {
+			inputs[i] = NewMatrix(0, Width, 1)
 		}
-		output := Add(MulT(weights, i), bias)
-		out <- output.Data[0]
+		labels := []int{}
+		var epoch = int64(0)
+		for _, in := range in {
+			value := <-in
+			labels = value.Labels
+			epoch = value.Epoch
+			for k, v := range value.Input {
+				inputs[k].Data = append(inputs[k].Data, v)
+			}
+		}
+		o := Input{
+			Input:  make([]float32, 3),
+			Labels: labels,
+			Epoch:  epoch,
+		}
+		for i := range inputs {
+			output := Add(MulT(weights, inputs[i]), bias)
+			o.Input[i] = output.Data[0]
+		}
+		out <- o
 	}
 }
 
@@ -79,9 +106,9 @@ func main() {
 	for i := range output {
 		output[i] = make(chan Input, 8)
 	}
-	top := make([]chan float32, 3)
+	top := make([]chan Input, 3)
 	for i := range top {
-		top[i] = make(chan float32, 8)
+		top[i] = make(chan Input, 8)
 	}
 
 	id := 0
@@ -98,19 +125,63 @@ func main() {
 		id++
 	}
 
+	data, err := iris.Load()
+	if err != nil {
+		panic(err)
+	}
+
+	for _, value := range data.Fisher {
+		sum := 0.0
+		for _, v := range value.Measures {
+			sum += v * v
+		}
+		length := math.Sqrt(sum)
+		for i := range value.Measures {
+			value.Measures[i] /= length
+		}
+	}
+
 	for epoch := 1; epoch < 256; epoch++ {
 		in := Inputs{
-			Epoch: int64(epoch),
+			Epoch:  int64(epoch),
+			Labels: make([]int, 3),
+			Inputs: make([][4]float32, 3),
 		}
+		indexes := [3]int{rng.Intn(50), 50 + rng.Intn(50), 100 + rng.Intn(50)}
 		for i := range in.Inputs {
-			in.Inputs[i] = rng.Float32()
+			for j := range in.Inputs[i] {
+				in.Inputs[i][j] = float32(data.Fisher[indexes[i]].Measures[j])
+			}
+			in.Labels[i] = iris.Labels[data.Fisher[indexes[i]].Label]
 		}
 		for i := range input {
 			input[i] <- in
 		}
 		fmt.Println(epoch)
-		for _, t := range top {
-			fmt.Println(<-t)
+
+		outputs := make([]Matrix, 3)
+		for i := range outputs {
+			outputs[i] = NewMatrix(0, 3, 1)
 		}
+		labels := []int{}
+		for _, in := range top {
+			value := <-in
+			labels = value.Labels
+			for k, v := range value.Input {
+				outputs[k].Data = append(outputs[k].Data, v)
+			}
+		}
+		loss := 0.0
+		for i := range outputs {
+			output := TaylorSoftmax(outputs[i])
+			expected := make([]float32, 3)
+			expected[labels[i]] = 1
+
+			for i, v := range output.Data {
+				diff := float64(float32(v) - expected[i])
+				loss += diff * diff
+			}
+		}
+		fmt.Println(loss)
 	}
 }
