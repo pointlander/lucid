@@ -265,6 +265,25 @@ type Multi struct {
 	U []float32
 }
 
+// NewMulti make a new multi
+func NewMulti(vars int) Multi {
+	factor := float32(math.Sqrt(2.0 / float64(vars)))
+	a := NewMatrix(0, vars, vars)
+	a.Data = a.Data[:cap(a.Data)]
+	for i := 0; i < vars; i++ {
+		for j := 0; j < vars; j++ {
+			if i == j {
+				a.Data[i*vars+j] = factor
+			}
+		}
+	}
+	u := make([]float32, vars)
+	return Multi{
+		A: a,
+		U: u,
+	}
+}
+
 // Factor factores a matrix into AA^T
 func Factor(vars [][]float32, debug bool) Multi {
 	rng := rand.New(rand.NewSource(1))

@@ -15,6 +15,8 @@ import (
 const (
 	// Width is the width of the model
 	Width = 4
+	// Window is the size of the window
+	Window = 16
 )
 
 // Inputs is the input to the first layer
@@ -24,29 +26,42 @@ type Inputs struct {
 	Epoch  int64
 }
 
-func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input) {
-	rng := rand.New(rand.NewSource(seed))
-	weights := NewMatrix(0, 4, 1)
-	bias := NewMatrix(0, 1, 1)
-	factor := math.Sqrt(2.0 / float64(4))
-	for i := 0; i < 4; i++ {
-		weights.Data = append(weights.Data, float32(rng.NormFloat64()*factor))
-	}
-	bias.Data = append(bias.Data, 0)
+func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done chan bool) {
+	//rng := rand.New(rand.NewSource(seed))
+	multi := NewMulti(5)
 	for input := range in {
-		o := Input{
-			Input:  make([]float32, 3),
-			Labels: input.Labels,
-			Epoch:  input.Epoch,
-		}
-		for j := range input.Inputs {
-			i := NewMatrix(0, 4, 1)
-			i.Data = append(i.Data, input.Inputs[j][:]...)
-			output := Step(Add(MulT(weights, i), bias))
-			o.Input[j] = output.Data[0]
-		}
-		for j := range out {
-			out[j] <- o
+		seeds := rand.New(rand.NewSource(input.Epoch))
+	sample:
+		for {
+			select {
+			case <-done:
+				break sample
+			default:
+				epoch := seeds.Int63()
+				weights := NewMatrix(0, 4, 1)
+				bias := NewMatrix(0, 1, 1)
+				samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
+				index := 0
+				for i := 0; i < 4; i++ {
+					weights.Data = append(weights.Data, samples[index])
+					index++
+				}
+				bias.Data = append(bias.Data, samples[index])
+				o := Input{
+					Input:  make([]float32, 3),
+					Labels: input.Labels,
+					Epoch:  epoch,
+				}
+				for j := range input.Inputs {
+					i := NewMatrix(0, 4, 1)
+					i.Data = append(i.Data, input.Inputs[j][:]...)
+					output := Step(Add(MulT(weights, i), bias))
+					o.Input[j] = output.Data[0]
+				}
+				for j := range out {
+					out[j] <- o
+				}
+			}
 		}
 	}
 }
@@ -59,14 +74,8 @@ type Input struct {
 }
 
 func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input) {
-	rng := rand.New(rand.NewSource(seed))
-	weights := NewMatrix(0, Width, 1)
-	bias := NewMatrix(0, 1, 1)
-	factor := math.Sqrt(2.0 / float64(Width))
-	for i := 0; i < Width; i++ {
-		weights.Data = append(weights.Data, float32(rng.NormFloat64()*factor))
-	}
-	bias.Data = append(bias.Data, 0)
+	//rng := rand.New(rand.NewSource(seed))
+	multi := NewMulti(Width + 1)
 	for {
 		inputs := make([]Matrix, 3)
 		for i := range inputs {
@@ -82,6 +91,15 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input) {
 				inputs[k].Data = append(inputs[k].Data, v)
 			}
 		}
+		weights := NewMatrix(0, Width, 1)
+		bias := NewMatrix(0, 1, 1)
+		samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
+		index := 0
+		for i := 0; i < Width; i++ {
+			weights.Data = append(weights.Data, samples[index])
+			index++
+		}
+		bias.Data = append(bias.Data, samples[index])
 		o := Input{
 			Input:  make([]float32, 3),
 			Labels: labels,
@@ -110,10 +128,14 @@ func main() {
 	for i := range top {
 		top[i] = make(chan Input, 8)
 	}
+	done := make([]chan bool, Width)
+	for i := range done {
+		done[i] = make(chan bool, 8)
+	}
 
 	id := 0
 	for i := 0; i < Width; i++ {
-		go neuron1(rng.Int63(), id, input[i], [3]chan<- Input{output[i], output[i+Width], output[i+2*Width]})
+		go neuron1(rng.Int63(), id, input[i], [3]chan<- Input{output[i], output[i+Width], output[i+2*Width]}, done[i])
 		id++
 	}
 	for i := 0; i < 3; i++ {
@@ -141,9 +163,18 @@ func main() {
 		}
 	}
 
+	type Loss struct {
+		Loss  float32
+		Epoch int64
+	}
+	losses := make([]Loss, Window)
+	for i := range losses {
+		losses[i].Loss = math.MaxFloat32
+	}
+	count := 0
 	for epoch := 1; epoch < 256; epoch++ {
 		in := Inputs{
-			Epoch:  int64(epoch),
+			Epoch:  int64(rng.Int31()),
 			Labels: make([]int, 3),
 			Inputs: make([][4]float32, 3),
 		}
@@ -159,29 +190,54 @@ func main() {
 		}
 		fmt.Println(epoch)
 
-		outputs := make([]Matrix, 3)
-		for i := range outputs {
-			outputs[i] = NewMatrix(0, 3, 1)
-		}
-		labels := []int{}
-		for _, in := range top {
-			value := <-in
-			labels = value.Labels
-			for k, v := range value.Input {
-				outputs[k].Data = append(outputs[k].Data, v)
+	search:
+		for {
+			outputs := make([]Matrix, 3)
+			for i := range outputs {
+				outputs[i] = NewMatrix(0, 3, 1)
 			}
-		}
-		loss := 0.0
-		for i := range outputs {
-			output := TaylorSoftmax(outputs[i])
-			expected := make([]float32, 3)
-			expected[labels[i]] = 1
+			labels := []int{}
+			loss := Loss{}
+			for _, in := range top {
+				value := <-in
+				labels = value.Labels
+				loss.Epoch = value.Epoch
+				for k, v := range value.Input {
+					outputs[k].Data = append(outputs[k].Data, v)
+				}
+			}
+			for i := range outputs {
+				output := TaylorSoftmax(outputs[i])
+				expected := make([]float32, 3)
+				expected[labels[i]] = 1
 
-			for i, v := range output.Data {
-				diff := float64(float32(v) - expected[i])
-				loss += diff * diff
+				for i, v := range output.Data {
+					diff := float32(v) - expected[i]
+					loss.Loss += diff * diff
+				}
+			}
+			index := 0
+			for index < len(losses) {
+				if loss.Loss < losses[index].Loss {
+					count++
+					loss, losses[index] = losses[index], loss
+					if index == 0 {
+						fmt.Println(losses[0])
+						if count > Window {
+							for _, done := range done {
+								done <- true
+							}
+							break search
+						}
+					}
+					index++
+					for index < len(losses) {
+						loss, losses[index] = losses[index], loss
+						index++
+					}
+				}
+				index++
 			}
 		}
-		fmt.Println(loss)
 	}
 }
