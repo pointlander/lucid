@@ -26,7 +26,7 @@ type Inputs struct {
 	Epoch  int64
 }
 
-func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done chan bool) {
+func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done chan []Loss) {
 	//rng := rand.New(rand.NewSource(seed))
 	multi := NewMulti(5)
 	for input := range in {
@@ -34,7 +34,18 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 	sample:
 		for {
 			select {
-			case <-done:
+			case losses := <-done:
+				vars := make([][]float32, 4+1)
+				for i := range vars {
+					vars[i] = make([]float32, Window)
+				}
+				for j := 0; j < Window; j++ {
+					samples := multi.Sample(rand.New(rand.NewSource(losses[j].Epoch + int64(id))))
+					for k := 0; k < 4+1; k++ {
+						vars[k][j] = samples[k]
+					}
+				}
+				multi = Factor(vars, false)
 				break sample
 			default:
 				epoch := seeds.Int63()
@@ -73,44 +84,65 @@ type Input struct {
 	Epoch  int64
 }
 
-func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input) {
+func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done chan []Loss) {
 	//rng := rand.New(rand.NewSource(seed))
 	multi := NewMulti(Width + 1)
 	for {
-		inputs := make([]Matrix, 3)
-		for i := range inputs {
-			inputs[i] = NewMatrix(0, Width, 1)
-		}
-		labels := []int{}
-		var epoch = int64(0)
-		for _, in := range in {
-			value := <-in
-			labels = value.Labels
-			epoch = value.Epoch
-			for k, v := range value.Input {
-				inputs[k].Data = append(inputs[k].Data, v)
+		select {
+		case losses := <-done:
+			vars := make([][]float32, 4+1)
+			for i := range vars {
+				vars[i] = make([]float32, Window)
 			}
+			for j := 0; j < Window; j++ {
+				samples := multi.Sample(rand.New(rand.NewSource(losses[j].Epoch + int64(id))))
+				for k := 0; k < 4+1; k++ {
+					vars[k][j] = samples[k]
+				}
+			}
+			multi = Factor(vars, false)
+		default:
+			inputs := make([]Matrix, 3)
+			for i := range inputs {
+				inputs[i] = NewMatrix(0, Width, 1)
+			}
+			labels := []int{}
+			var epoch = int64(0)
+			for _, in := range in {
+				value := <-in
+				labels = value.Labels
+				epoch = value.Epoch
+				for k, v := range value.Input {
+					inputs[k].Data = append(inputs[k].Data, v)
+				}
+			}
+			weights := NewMatrix(0, Width, 1)
+			bias := NewMatrix(0, 1, 1)
+			samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
+			index := 0
+			for i := 0; i < Width; i++ {
+				weights.Data = append(weights.Data, samples[index])
+				index++
+			}
+			bias.Data = append(bias.Data, samples[index])
+			o := Input{
+				Input:  make([]float32, 3),
+				Labels: labels,
+				Epoch:  epoch,
+			}
+			for i := range inputs {
+				output := Add(MulT(weights, inputs[i]), bias)
+				o.Input[i] = output.Data[0]
+			}
+			out <- o
 		}
-		weights := NewMatrix(0, Width, 1)
-		bias := NewMatrix(0, 1, 1)
-		samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
-		index := 0
-		for i := 0; i < Width; i++ {
-			weights.Data = append(weights.Data, samples[index])
-			index++
-		}
-		bias.Data = append(bias.Data, samples[index])
-		o := Input{
-			Input:  make([]float32, 3),
-			Labels: labels,
-			Epoch:  epoch,
-		}
-		for i := range inputs {
-			output := Add(MulT(weights, inputs[i]), bias)
-			o.Input[i] = output.Data[0]
-		}
-		out <- o
 	}
+}
+
+// Loss is a neural network output loss
+type Loss struct {
+	Loss  float32
+	Epoch int64
 }
 
 func main() {
@@ -128,9 +160,13 @@ func main() {
 	for i := range top {
 		top[i] = make(chan Input, 8)
 	}
-	done := make([]chan bool, Width)
+	done := make([]chan []Loss, Width)
 	for i := range done {
-		done[i] = make(chan bool, 8)
+		done[i] = make(chan []Loss, 8)
+	}
+	done1 := make([]chan []Loss, 3)
+	for i := range done1 {
+		done1[i] = make(chan []Loss, 8)
 	}
 
 	id := 0
@@ -143,7 +179,7 @@ func main() {
 		for j := range input {
 			input[j] = output[Width*i+j]
 		}
-		go neuron2(rng.Int63(), id, input, top[i])
+		go neuron2(rng.Int63(), id, input, top[i], done1[i])
 		id++
 	}
 
@@ -163,10 +199,6 @@ func main() {
 		}
 	}
 
-	type Loss struct {
-		Loss  float32
-		Epoch int64
-	}
 	losses := make([]Loss, Window)
 	for i := range losses {
 		losses[i].Loss = math.MaxFloat32
@@ -225,7 +257,10 @@ func main() {
 						fmt.Println(losses[0])
 						if count > Window {
 							for _, done := range done {
-								done <- true
+								done <- losses
+							}
+							for _, done := range done1 {
+								done <- losses
 							}
 							break search
 						}
