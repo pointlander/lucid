@@ -15,7 +15,13 @@ const (
 	Width = 4
 )
 
-func neuron1(seed int64, id int, in <-chan [4]float32, out [3]chan<- float32) {
+// Inputs is the input to the first layer
+type Inputs struct {
+	Inputs [4]float32
+	Epoch  int64
+}
+
+func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input) {
 	rng := rand.New(rand.NewSource(seed))
 	weights := NewMatrix(0, 4, 1)
 	bias := NewMatrix(0, 1, 1)
@@ -26,15 +32,24 @@ func neuron1(seed int64, id int, in <-chan [4]float32, out [3]chan<- float32) {
 	bias.Data = append(bias.Data, 0)
 	for input := range in {
 		i := NewMatrix(0, 4, 1)
-		i.Data = append(i.Data, input[:]...)
+		i.Data = append(i.Data, input.Inputs[:]...)
 		output := Step(Add(MulT(weights, i), bias))
 		for j := range out {
-			out[j] <- output.Data[0]
+			out[j] <- Input{
+				Input: output.Data[0],
+				Epoch: input.Epoch,
+			}
 		}
 	}
 }
 
-func neuron2(seed int64, id int, in [Width]<-chan float32, out chan<- float32) {
+// Input is the input into the second layer
+type Input struct {
+	Input float32
+	Epoch int64
+}
+
+func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- float32) {
 	rng := rand.New(rand.NewSource(seed))
 	weights := NewMatrix(0, Width, 1)
 	bias := NewMatrix(0, 1, 1)
@@ -46,7 +61,7 @@ func neuron2(seed int64, id int, in [Width]<-chan float32, out chan<- float32) {
 	for {
 		i := NewMatrix(0, Width, 1)
 		for _, in := range in {
-			i.Data = append(i.Data, <-in)
+			i.Data = append(i.Data, (<-in).Input)
 		}
 		output := Add(MulT(weights, i), bias)
 		out <- output.Data[0]
@@ -56,13 +71,13 @@ func neuron2(seed int64, id int, in [Width]<-chan float32, out chan<- float32) {
 func main() {
 	rng := rand.New(rand.NewSource(1))
 
-	input := make([]chan [4]float32, Width)
-	output := make([]chan float32, Width*3)
+	input := make([]chan Inputs, Width)
+	output := make([]chan Input, Width*3)
 	for i := range input {
-		input[i] = make(chan [4]float32, 8)
+		input[i] = make(chan Inputs, 8)
 	}
 	for i := range output {
-		output[i] = make(chan float32, 8)
+		output[i] = make(chan Input, 8)
 	}
 	top := make([]chan float32, 3)
 	for i := range top {
@@ -71,11 +86,11 @@ func main() {
 
 	id := 0
 	for i := 0; i < Width; i++ {
-		go neuron1(rng.Int63(), id, input[i], [3]chan<- float32{output[i], output[i+Width], output[i+2*Width]})
+		go neuron1(rng.Int63(), id, input[i], [3]chan<- Input{output[i], output[i+Width], output[i+2*Width]})
 		id++
 	}
 	for i := 0; i < 3; i++ {
-		input := [Width]<-chan float32{}
+		input := [Width]<-chan Input{}
 		for j := range input {
 			input[j] = output[Width*i+j]
 		}
@@ -83,14 +98,19 @@ func main() {
 		id++
 	}
 
-	in := [4]float32{}
-	for i := range in {
-		in[i] = rng.Float32()
-	}
-	for i := range input {
-		input[i] <- in
-	}
-	for _, t := range top {
-		fmt.Println(<-t)
+	for epoch := 1; epoch < 256; epoch++ {
+		in := Inputs{
+			Epoch: int64(epoch),
+		}
+		for i := range in.Inputs {
+			in.Inputs[i] = rng.Float32()
+		}
+		for i := range input {
+			input[i] <- in
+		}
+		fmt.Println(epoch)
+		for _, t := range top {
+			fmt.Println(<-t)
+		}
 	}
 }
