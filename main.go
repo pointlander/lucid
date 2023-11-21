@@ -20,7 +20,7 @@ const (
 	// Width is the width of the model
 	Width = 16
 	// Window is the size of the window
-	Window = 16
+	Window = 4
 )
 
 // Inputs is the input to the first layer
@@ -225,7 +225,7 @@ type Loss struct {
 }
 
 func main() {
-	rng := rand.New(rand.NewSource(1))
+	rng := rand.New(rand.NewSource(2))
 
 	input := make([]chan Inputs, Width)
 	output := make([]chan Input, Width*3)
@@ -377,6 +377,7 @@ func main() {
 									}
 								}
 							}
+							count = 0
 							break search
 						}
 					}
@@ -391,66 +392,74 @@ func main() {
 		}
 	}
 
-	id = 0
-	weights := NewMatrix(0, 4, Width)
-	bias := NewMatrix(0, 1, Width)
-	for i, value := range dump {
-		fini[i] <- true
-		multi := <-value
-		samples := multi.U //multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
-		index := 0
-		for i := 0; i < 4; i++ {
-			weights.Data = append(weights.Data, samples[index])
-			index++
-		}
-		bias.Data = append(bias.Data, samples[index])
-		id++
-	}
-	weights1 := NewMatrix(0, Width, 3)
-	bias1 := NewMatrix(0, 1, 3)
-	for i, value := range dump1 {
-		fini1[i] <- true
-		multi := <-value
-		samples := multi.U //multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
-		index := 0
-		for i := 0; i < Width; i++ {
-			weights1.Data = append(weights1.Data, samples[index])
-			index++
-		}
-		bias1.Data = append(bias1.Data, samples[index])
-		id++
-	}
-
 	correct := 0
 	loss := 0.0
-	for _, fisher := range data.Fisher {
-		input := NewMatrix(0, 4, 1)
-		for _, v := range fisher.Measures {
-			input.Data = append(input.Data, float32(v))
+	multi := make([]Multi, len(dump))
+	multi1 := make([]Multi, len(dump1))
+	for i, value := range dump {
+		fini[i] <- true
+		multi[i] = <-value
+	}
+	for i, value := range dump1 {
+		fini1[i] <- true
+		multi1[i] = <-value
+	}
+	for s := 0; s < 256; s++ {
+		id = 0
+		weights := NewMatrix(0, 4, Width)
+		bias := NewMatrix(0, 1, Width)
+		for _, multi := range multi {
+			samples := multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
+			index := 0
+			for i := 0; i < 4; i++ {
+				weights.Data = append(weights.Data, samples[index])
+				index++
+			}
+			bias.Data = append(bias.Data, samples[index])
+			id++
+		}
+		weights1 := NewMatrix(0, Width, 3)
+		bias1 := NewMatrix(0, 1, 3)
+		for _, multi := range multi1 {
+			samples := multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
+			index := 0
+			for i := 0; i < Width; i++ {
+				weights1.Data = append(weights1.Data, samples[index])
+				index++
+			}
+			bias1.Data = append(bias1.Data, samples[index])
+			id++
 		}
 
-		output := Step(Add(MulT(weights, input), bias))
-		output = TaylorSoftmax(Add(MulT(weights1, output), bias1))
-		max, index := float32(0.0), 0
-		for i, value := range output.Data {
-			v := float32(value)
-			if v > max {
-				max, index = v, i
+		for _, fisher := range data.Fisher {
+			input := NewMatrix(0, 4, 1)
+			for _, v := range fisher.Measures {
+				input.Data = append(input.Data, float32(v))
+			}
+
+			output := Step(Add(MulT(weights, input), bias))
+			output = TaylorSoftmax(Add(MulT(weights1, output), bias1))
+			max, index := float32(0.0), 0
+			for i, value := range output.Data {
+				v := float32(value)
+				if v > max {
+					max, index = v, i
+				}
+			}
+			//fmt.Println(index, max)
+			if index == iris.Labels[fisher.Label] {
+				correct++
+			}
+
+			expected := make([]float32, 3)
+			expected[iris.Labels[fisher.Label]] = 1
+
+			for i, v := range output.Data {
+				diff := float64(float32(v) - expected[i])
+				loss += diff * diff
 			}
 		}
-		fmt.Println(index, max)
-		if index == iris.Labels[fisher.Label] {
-			correct++
-		}
-
-		expected := make([]float32, 3)
-		expected[iris.Labels[fisher.Label]] = 1
-
-		for i, v := range output.Data {
-			diff := float64(float32(v) - expected[i])
-			loss += diff * diff
-		}
 	}
-	fmt.Println("correct", correct, float64(correct)/150)
-	fmt.Println("loss", loss)
+	fmt.Println("correct", correct/256, float64(correct)/(150*256))
+	fmt.Println("loss", loss/256)
 }
