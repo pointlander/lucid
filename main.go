@@ -28,6 +28,7 @@ type Inputs struct {
 	Inputs [][4]float32
 	Labels []int
 	Epoch  int64
+	Done   bool
 }
 
 func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done chan []Loss,
@@ -62,6 +63,12 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 				lock.Lock()
 				multi = Factor(vars, false)
 				lock.Unlock()
+				o := Input{
+					Done: true,
+				}
+				for j := range out {
+					out[j] <- o
+				}
 				break sample
 			default:
 				epoch := seeds.Int63()
@@ -99,6 +106,7 @@ type Input struct {
 	Input  []float32
 	Labels []int
 	Epoch  int64
+	Done   bool
 }
 
 func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done chan []Loss,
@@ -114,6 +122,7 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done 
 		dump <- multi
 		lock.Unlock()
 	}()
+	sets := make(map[int64][]Input)
 	for {
 		select {
 		case losses := <-done:
@@ -131,41 +140,80 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done 
 			multi = Factor(vars, false)
 			lock.Unlock()
 		default:
-			inputs := make([]Matrix, 3)
-			for i := range inputs {
-				inputs[i] = NewMatrix(0, Width, 1)
-			}
-			labels := []int{}
-			var epoch = int64(0)
-			for _, in := range in {
+			for i, in := range in {
 				select {
 				case value := <-in:
+					set := sets[value.Epoch]
+					if set == nil {
+						set = make([]Input, Width)
+					}
+					set[i] = value
+					sets[value.Epoch] = set
+				default:
+				}
+			}
+		}
+		for key, value := range sets {
+			isComplete, isDone, hasDone := true, true, false
+			for _, v := range value {
+				if !v.Done {
+					isDone = false
+				} else {
+					hasDone = true
+				}
+			}
+			if isDone {
+				o := Input{
+					Done: true,
+				}
+				out <- o
+				sets = make(map[int64][]Input)
+				break
+			}
+			if hasDone {
+				continue
+			}
+			for _, v := range value {
+				if v.Input == nil {
+					isComplete = false
+					break
+				}
+			}
+			if isComplete {
+				inputs := make([]Matrix, 3)
+				for i := range inputs {
+					inputs[i] = NewMatrix(0, Width, 1)
+				}
+				labels := []int{}
+				var epoch = int64(0)
+				for _, value := range value {
 					labels = value.Labels
 					epoch = value.Epoch
 					for k, v := range value.Input {
 						inputs[k].Data = append(inputs[k].Data, v)
 					}
 				}
+				weights := NewMatrix(0, Width, 1)
+				bias := NewMatrix(0, 1, 1)
+				samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
+				index := 0
+				for i := 0; i < Width; i++ {
+					weights.Data = append(weights.Data, samples[index])
+					index++
+				}
+				bias.Data = append(bias.Data, samples[index])
+				o := Input{
+					Input:  make([]float32, 3),
+					Labels: labels,
+					Epoch:  epoch,
+				}
+				for i := range inputs {
+					output := Add(MulT(weights, inputs[i]), bias)
+					o.Input[i] = output.Data[0]
+				}
+				out <- o
+				delete(sets, key)
 			}
-			weights := NewMatrix(0, Width, 1)
-			bias := NewMatrix(0, 1, 1)
-			samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
-			index := 0
-			for i := 0; i < Width; i++ {
-				weights.Data = append(weights.Data, samples[index])
-				index++
-			}
-			bias.Data = append(bias.Data, samples[index])
-			o := Input{
-				Input:  make([]float32, 3),
-				Labels: labels,
-				Epoch:  epoch,
-			}
-			for i := range inputs {
-				output := Add(MulT(weights, inputs[i]), bias)
-				o.Input[i] = output.Data[0]
-			}
-			out <- o
 		}
 	}
 }
@@ -311,10 +359,23 @@ func main() {
 						fmt.Println(losses[0])
 						if count > Window {
 							for _, done := range done {
-								done <- losses
+								cp := make([]Loss, len(losses))
+								copy(cp, losses)
+								done <- cp
 							}
 							for _, done := range done1 {
-								done <- losses
+								cp := make([]Loss, len(losses))
+								copy(cp, losses)
+								done <- cp
+							}
+							loop := true
+							for loop {
+								for _, in := range top {
+									value := <-in
+									if value.Done {
+										loop = false
+									}
+								}
 							}
 							break search
 						}
