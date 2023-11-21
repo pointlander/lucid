@@ -38,6 +38,7 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 	lock.Lock()
 	multi := NewMulti(5)
 	lock.Unlock()
+	factor := float32(math.Sqrt(2.0 / float64(5)))
 	go func() {
 		<-fini
 		lock.Lock()
@@ -77,10 +78,18 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 				samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
 				index := 0
 				for i := 0; i < 4; i++ {
-					weights.Data = append(weights.Data, samples[index])
+					if samples[index] > 0 {
+						weights.Data = append(weights.Data, factor)
+					} else {
+						weights.Data = append(weights.Data, -factor)
+					}
 					index++
 				}
-				bias.Data = append(bias.Data, samples[index])
+				if samples[index] > 0 {
+					bias.Data = append(bias.Data, factor)
+				} else {
+					bias.Data = append(bias.Data, -factor)
+				}
 				o := Input{
 					Input:  make([]float32, 3),
 					Labels: input.Labels,
@@ -116,6 +125,7 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done 
 	lock.Lock()
 	multi := NewMulti(Width + 1)
 	lock.Unlock()
+	factor := float32(math.Sqrt(2.0 / float64(Width+1)))
 	go func() {
 		<-fini
 		lock.Lock()
@@ -198,10 +208,18 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done 
 				samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
 				index := 0
 				for i := 0; i < Width; i++ {
-					weights.Data = append(weights.Data, samples[index])
+					if samples[index] > 0 {
+						weights.Data = append(weights.Data, factor)
+					} else {
+						weights.Data = append(weights.Data, -factor)
+					}
 					index++
 				}
-				bias.Data = append(bias.Data, samples[index])
+				if samples[index] > 0 {
+					bias.Data = append(bias.Data, factor)
+				} else {
+					bias.Data = append(bias.Data, -factor)
+				}
 				o := Input{
 					Input:  make([]float32, 3),
 					Labels: labels,
@@ -404,6 +422,8 @@ func main() {
 		fini1[i] <- true
 		multi1[i] = <-value
 	}
+	factor1 := float32(math.Sqrt(2.0 / float64(5)))
+	factor2 := float32(math.Sqrt(2.0 / float64(Width+1)))
 	for s := 0; s < 256; s++ {
 		id = 0
 		weights := NewMatrix(0, 4, Width)
@@ -412,10 +432,18 @@ func main() {
 			samples := multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
 			index := 0
 			for i := 0; i < 4; i++ {
-				weights.Data = append(weights.Data, samples[index])
+				if samples[index] > 0 {
+					weights.Data = append(weights.Data, factor1)
+				} else {
+					weights.Data = append(weights.Data, -factor1)
+				}
 				index++
 			}
-			bias.Data = append(bias.Data, samples[index])
+			if samples[index] > 0 {
+				bias.Data = append(bias.Data, factor1)
+			} else {
+				bias.Data = append(bias.Data, -factor1)
+			}
 			id++
 		}
 		weights1 := NewMatrix(0, Width, 3)
@@ -424,10 +452,18 @@ func main() {
 			samples := multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
 			index := 0
 			for i := 0; i < Width; i++ {
-				weights1.Data = append(weights1.Data, samples[index])
+				if samples[index] > 0 {
+					weights1.Data = append(weights1.Data, factor2)
+				} else {
+					weights1.Data = append(weights1.Data, -factor2)
+				}
 				index++
 			}
-			bias1.Data = append(bias1.Data, samples[index])
+			if samples[index] > 0 {
+				bias1.Data = append(bias1.Data, factor2)
+			} else {
+				bias1.Data = append(bias1.Data, -factor2)
+			}
 			id++
 		}
 
