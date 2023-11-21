@@ -20,7 +20,9 @@ const (
 	// Width is the width of the model
 	Width = 16
 	// Window is the size of the window
-	Window = 4
+	Window = 16
+	// Discrete discrete mode
+	Discrete = false
 )
 
 // Inputs is the input to the first layer
@@ -78,17 +80,25 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 				samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
 				index := 0
 				for i := 0; i < 4; i++ {
-					if samples[index] > 0 {
-						weights.Data = append(weights.Data, factor)
+					if Discrete {
+						if samples[index] > 0 {
+							weights.Data = append(weights.Data, factor)
+						} else {
+							weights.Data = append(weights.Data, -factor)
+						}
 					} else {
-						weights.Data = append(weights.Data, -factor)
+						weights.Data = append(weights.Data, samples[index])
 					}
 					index++
 				}
-				if samples[index] > 0 {
-					bias.Data = append(bias.Data, factor)
+				if Discrete {
+					if samples[index] > 0 {
+						bias.Data = append(bias.Data, factor)
+					} else {
+						bias.Data = append(bias.Data, -factor)
+					}
 				} else {
-					bias.Data = append(bias.Data, -factor)
+					bias.Data = append(bias.Data, samples[index])
 				}
 				o := Input{
 					Input:  make([]float32, 3),
@@ -208,17 +218,25 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done 
 				samples := multi.Sample(rand.New(rand.NewSource(epoch + int64(id))))
 				index := 0
 				for i := 0; i < Width; i++ {
-					if samples[index] > 0 {
-						weights.Data = append(weights.Data, factor)
+					if Discrete {
+						if samples[index] > 0 {
+							weights.Data = append(weights.Data, factor)
+						} else {
+							weights.Data = append(weights.Data, -factor)
+						}
 					} else {
-						weights.Data = append(weights.Data, -factor)
+						weights.Data = append(weights.Data, samples[index])
 					}
 					index++
 				}
-				if samples[index] > 0 {
-					bias.Data = append(bias.Data, factor)
+				if Discrete {
+					if samples[index] > 0 {
+						bias.Data = append(bias.Data, factor)
+					} else {
+						bias.Data = append(bias.Data, -factor)
+					}
 				} else {
-					bias.Data = append(bias.Data, -factor)
+					bias.Data = append(bias.Data, samples[index])
 				}
 				o := Input{
 					Input:  make([]float32, 3),
@@ -324,6 +342,9 @@ func main() {
 		<-c
 		work = false
 	}()
+	min := Loss{
+		Loss: float32(math.MaxFloat32),
+	}
 	for epoch := 1; epoch < 256 && work; epoch++ {
 		in := Inputs{
 			Epoch:  int64(rng.Int31()),
@@ -359,7 +380,7 @@ func main() {
 				}
 			}
 			for i := range outputs {
-				output := TaylorSoftmax(outputs[i])
+				output := Sigmoid(outputs[i])
 				expected := make([]float32, 3)
 				expected[labels[i]] = 1
 
@@ -374,29 +395,42 @@ func main() {
 					count++
 					loss, losses[index] = losses[index], loss
 					if index == 0 {
-						fmt.Println(losses[0])
 						if count > Window {
-							for _, done := range done {
-								cp := make([]Loss, len(losses))
-								copy(cp, losses)
-								done <- cp
+							sum := float32(0)
+							for i := range losses {
+								sum += losses[i].Loss
 							}
-							for _, done := range done1 {
-								cp := make([]Loss, len(losses))
-								copy(cp, losses)
-								done <- cp
-							}
-							loop := true
-							for loop {
-								for _, in := range top {
-									value := <-in
-									if value.Done {
-										loop = false
+							sum /= float32(len(losses))
+							fmt.Println(sum)
+							if sum < min.Loss {
+								min = losses[0]
+								min.Loss = sum
+								for _, done := range done {
+									cp := make([]Loss, len(losses))
+									copy(cp, losses)
+									done <- cp
+								}
+								for _, done := range done1 {
+									cp := make([]Loss, len(losses))
+									copy(cp, losses)
+									done <- cp
+								}
+								loop := true
+								for loop {
+									for _, in := range top {
+										value := <-in
+										if value.Done {
+											loop = false
+										}
 									}
 								}
+								count = 0
+								for i := range losses {
+									losses[i].Loss = math.MaxFloat32
+									losses[i].Epoch = 0
+								}
+								break search
 							}
-							count = 0
-							break search
 						}
 					}
 					index++
@@ -429,20 +463,29 @@ func main() {
 		weights := NewMatrix(0, 4, Width)
 		bias := NewMatrix(0, 1, Width)
 		for _, multi := range multi {
-			samples := multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
+			samples := multi.Sample(rand.New(rand.NewSource(min.Epoch + int64(id))))
 			index := 0
 			for i := 0; i < 4; i++ {
-				if samples[index] > 0 {
-					weights.Data = append(weights.Data, factor1)
+				if Discrete {
+					if samples[index] > 0 {
+						weights.Data = append(weights.Data, factor1)
+					} else {
+						weights.Data = append(weights.Data, -factor1)
+					}
 				} else {
-					weights.Data = append(weights.Data, -factor1)
+					weights.Data = append(weights.Data, samples[index])
 				}
 				index++
 			}
-			if samples[index] > 0 {
-				bias.Data = append(bias.Data, factor1)
+
+			if Discrete {
+				if samples[index] > 0 {
+					bias.Data = append(bias.Data, factor1)
+				} else {
+					bias.Data = append(bias.Data, -factor1)
+				}
 			} else {
-				bias.Data = append(bias.Data, -factor1)
+				bias.Data = append(bias.Data, samples[index])
 			}
 			id++
 		}
@@ -452,17 +495,25 @@ func main() {
 			samples := multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
 			index := 0
 			for i := 0; i < Width; i++ {
-				if samples[index] > 0 {
-					weights1.Data = append(weights1.Data, factor2)
+				if Discrete {
+					if samples[index] > 0 {
+						weights1.Data = append(weights1.Data, factor2)
+					} else {
+						weights1.Data = append(weights1.Data, -factor2)
+					}
 				} else {
-					weights1.Data = append(weights1.Data, -factor2)
+					weights1.Data = append(weights1.Data, samples[index])
 				}
 				index++
 			}
-			if samples[index] > 0 {
-				bias1.Data = append(bias1.Data, factor2)
+			if Discrete {
+				if samples[index] > 0 {
+					bias1.Data = append(bias1.Data, factor2)
+				} else {
+					bias1.Data = append(bias1.Data, -factor2)
+				}
 			} else {
-				bias1.Data = append(bias1.Data, -factor2)
+				bias1.Data = append(bias1.Data, samples[index])
 			}
 			id++
 		}
@@ -474,7 +525,7 @@ func main() {
 			}
 
 			output := Step(Add(MulT(weights, input), bias))
-			output = TaylorSoftmax(Add(MulT(weights1, output), bias1))
+			output = Sigmoid(Add(MulT(weights1, output), bias1))
 			max, index := float32(0.0), 0
 			for i, value := range output.Data {
 				v := float32(value)
