@@ -42,10 +42,12 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 	lock.Unlock()
 	factor := float32(math.Sqrt(2.0 / float64(5)))
 	go func() {
-		<-fini
-		lock.Lock()
-		dump <- multi
-		lock.Unlock()
+		for {
+			<-fini
+			lock.Lock()
+			dump <- multi
+			lock.Unlock()
+		}
 	}()
 	for input := range in {
 		seeds := rand.New(rand.NewSource(input.Epoch))
@@ -137,10 +139,12 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done 
 	lock.Unlock()
 	factor := float32(math.Sqrt(2.0 / float64(Width+1)))
 	go func() {
-		<-fini
-		lock.Lock()
-		dump <- multi
-		lock.Unlock()
+		for {
+			<-fini
+			lock.Lock()
+			dump <- multi
+			lock.Unlock()
+		}
 	}()
 	sets := make(map[int64][]Input)
 	for {
@@ -342,6 +346,116 @@ func main() {
 		<-c
 		work = false
 	}()
+
+	getCorrect := func(min Loss) int {
+		correct := 0
+		loss := 0.0
+		multi := make([]Multi, len(dump))
+		multi1 := make([]Multi, len(dump1))
+		for i, value := range dump {
+			fini[i] <- true
+			multi[i] = <-value
+		}
+		for i, value := range dump1 {
+			fini1[i] <- true
+			multi1[i] = <-value
+		}
+		factor1 := float32(math.Sqrt(2.0 / float64(5)))
+		factor2 := float32(math.Sqrt(2.0 / float64(Width+1)))
+		for s := 0; s < 256; s++ {
+			id = 0
+			weights := NewMatrix(0, 4, Width)
+			bias := NewMatrix(0, 1, Width)
+			for _, multi := range multi {
+				samples := multi.Sample(rand.New(rand.NewSource(min.Epoch + int64(id))))
+				index := 0
+				for i := 0; i < 4; i++ {
+					if Discrete {
+						if samples[index] > 0 {
+							weights.Data = append(weights.Data, factor1)
+						} else {
+							weights.Data = append(weights.Data, -factor1)
+						}
+					} else {
+						weights.Data = append(weights.Data, samples[index])
+					}
+					index++
+				}
+
+				if Discrete {
+					if samples[index] > 0 {
+						bias.Data = append(bias.Data, factor1)
+					} else {
+						bias.Data = append(bias.Data, -factor1)
+					}
+				} else {
+					bias.Data = append(bias.Data, samples[index])
+				}
+				id++
+			}
+			weights1 := NewMatrix(0, Width, 3)
+			bias1 := NewMatrix(0, 1, 3)
+			for _, multi := range multi1 {
+				samples := multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
+				index := 0
+				for i := 0; i < Width; i++ {
+					if Discrete {
+						if samples[index] > 0 {
+							weights1.Data = append(weights1.Data, factor2)
+						} else {
+							weights1.Data = append(weights1.Data, -factor2)
+						}
+					} else {
+						weights1.Data = append(weights1.Data, samples[index])
+					}
+					index++
+				}
+				if Discrete {
+					if samples[index] > 0 {
+						bias1.Data = append(bias1.Data, factor2)
+					} else {
+						bias1.Data = append(bias1.Data, -factor2)
+					}
+				} else {
+					bias1.Data = append(bias1.Data, samples[index])
+				}
+				id++
+			}
+
+			for _, fisher := range data.Fisher {
+				input := NewMatrix(0, 4, 1)
+				for _, v := range fisher.Measures {
+					input.Data = append(input.Data, float32(v))
+				}
+
+				output := Step(Add(MulT(weights, input), bias))
+				output = Sigmoid(Add(MulT(weights1, output), bias1))
+				max, index := float32(0.0), 0
+				for i, value := range output.Data {
+					v := float32(value)
+					if v > max {
+						max, index = v, i
+					}
+				}
+				//fmt.Println(index, max)
+				if index == iris.Labels[fisher.Label] {
+					correct++
+				}
+
+				expected := make([]float32, 3)
+				expected[iris.Labels[fisher.Label]] = 1
+
+				for i, v := range output.Data {
+					diff := float64(float32(v) - expected[i])
+					loss += diff * diff
+				}
+			}
+		}
+		fmt.Println("correct", correct/256, float64(correct)/(150*256))
+		fmt.Println("loss", loss/256)
+		return correct
+	}
+
 	min := Loss{
 		Loss: float32(math.MaxFloat32),
 	}
@@ -429,6 +543,7 @@ func main() {
 									losses[i].Loss = math.MaxFloat32
 									losses[i].Epoch = 0
 								}
+								getCorrect(min)
 								break search
 							}
 						}
@@ -443,110 +558,5 @@ func main() {
 			}
 		}
 	}
-
-	correct := 0
-	loss := 0.0
-	multi := make([]Multi, len(dump))
-	multi1 := make([]Multi, len(dump1))
-	for i, value := range dump {
-		fini[i] <- true
-		multi[i] = <-value
-	}
-	for i, value := range dump1 {
-		fini1[i] <- true
-		multi1[i] = <-value
-	}
-	factor1 := float32(math.Sqrt(2.0 / float64(5)))
-	factor2 := float32(math.Sqrt(2.0 / float64(Width+1)))
-	for s := 0; s < 256; s++ {
-		id = 0
-		weights := NewMatrix(0, 4, Width)
-		bias := NewMatrix(0, 1, Width)
-		for _, multi := range multi {
-			samples := multi.Sample(rand.New(rand.NewSource(min.Epoch + int64(id))))
-			index := 0
-			for i := 0; i < 4; i++ {
-				if Discrete {
-					if samples[index] > 0 {
-						weights.Data = append(weights.Data, factor1)
-					} else {
-						weights.Data = append(weights.Data, -factor1)
-					}
-				} else {
-					weights.Data = append(weights.Data, samples[index])
-				}
-				index++
-			}
-
-			if Discrete {
-				if samples[index] > 0 {
-					bias.Data = append(bias.Data, factor1)
-				} else {
-					bias.Data = append(bias.Data, -factor1)
-				}
-			} else {
-				bias.Data = append(bias.Data, samples[index])
-			}
-			id++
-		}
-		weights1 := NewMatrix(0, Width, 3)
-		bias1 := NewMatrix(0, 1, 3)
-		for _, multi := range multi1 {
-			samples := multi.Sample(rand.New(rand.NewSource(losses[0].Epoch + int64(id))))
-			index := 0
-			for i := 0; i < Width; i++ {
-				if Discrete {
-					if samples[index] > 0 {
-						weights1.Data = append(weights1.Data, factor2)
-					} else {
-						weights1.Data = append(weights1.Data, -factor2)
-					}
-				} else {
-					weights1.Data = append(weights1.Data, samples[index])
-				}
-				index++
-			}
-			if Discrete {
-				if samples[index] > 0 {
-					bias1.Data = append(bias1.Data, factor2)
-				} else {
-					bias1.Data = append(bias1.Data, -factor2)
-				}
-			} else {
-				bias1.Data = append(bias1.Data, samples[index])
-			}
-			id++
-		}
-
-		for _, fisher := range data.Fisher {
-			input := NewMatrix(0, 4, 1)
-			for _, v := range fisher.Measures {
-				input.Data = append(input.Data, float32(v))
-			}
-
-			output := Step(Add(MulT(weights, input), bias))
-			output = Sigmoid(Add(MulT(weights1, output), bias1))
-			max, index := float32(0.0), 0
-			for i, value := range output.Data {
-				v := float32(value)
-				if v > max {
-					max, index = v, i
-				}
-			}
-			//fmt.Println(index, max)
-			if index == iris.Labels[fisher.Label] {
-				correct++
-			}
-
-			expected := make([]float32, 3)
-			expected[iris.Labels[fisher.Label]] = 1
-
-			for i, v := range output.Data {
-				diff := float64(float32(v) - expected[i])
-				loss += diff * diff
-			}
-		}
-	}
-	fmt.Println("correct", correct/256, float64(correct)/(150*256))
-	fmt.Println("loss", loss/256)
+	getCorrect(min)
 }
