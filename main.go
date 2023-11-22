@@ -24,7 +24,7 @@ const (
 	// Discrete discrete mode
 	Discrete = false
 	// Batch size is the size of the batch
-	Batch = 1
+	Batch = 75
 )
 
 // Inputs is the input to the first layer
@@ -121,7 +121,6 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 			}
 		}
 	}
-	dump <- multi
 }
 
 // Input is the input into the second layer
