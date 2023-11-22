@@ -236,7 +236,7 @@ func SelfEntropy(Q, K, V Matrix) []float32 {
 		for _, e := range entropies {
 			entropy += float64(e) * math.Log(float64(e))
 		}
-		results = append(results, float32(entropy))
+		results = append(results, float32(-entropy))
 	}
 	return results
 }
