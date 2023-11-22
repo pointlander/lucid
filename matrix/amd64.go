@@ -5,7 +5,7 @@
 //go:build amd64
 // +build amd64
 
-package main
+package matrix
 
 import (
 	"github.com/ziutek/blas"
