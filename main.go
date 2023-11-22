@@ -23,6 +23,8 @@ const (
 	Window = 16
 	// Discrete discrete mode
 	Discrete = false
+	// Batch size is the size of the batch
+	Batch = 1
 )
 
 // Inputs is the input to the first layer
@@ -103,7 +105,7 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 					bias.Data = append(bias.Data, samples[index])
 				}
 				o := Input{
-					Input:  make([]float32, 3),
+					Input:  make([]float32, Batch*3),
 					Labels: input.Labels,
 					Epoch:  epoch,
 				}
@@ -204,7 +206,7 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done 
 				}
 			}
 			if isComplete {
-				inputs := make([]Matrix, 3)
+				inputs := make([]Matrix, Batch*3)
 				for i := range inputs {
 					inputs[i] = NewMatrix(0, Width, 1)
 				}
@@ -243,7 +245,7 @@ func neuron2(seed int64, id int, in [Width]<-chan Input, out chan<- Input, done 
 					bias.Data = append(bias.Data, samples[index])
 				}
 				o := Input{
-					Input:  make([]float32, 3),
+					Input:  make([]float32, Batch*3),
 					Labels: labels,
 					Epoch:  epoch,
 				}
@@ -462,10 +464,15 @@ func main() {
 	for epoch := 1; epoch < 256 && work; epoch++ {
 		in := Inputs{
 			Epoch:  int64(rng.Int31()),
-			Labels: make([]int, 3),
-			Inputs: make([][4]float32, 3),
+			Labels: make([]int, Batch*3),
+			Inputs: make([][4]float32, Batch*3),
 		}
-		indexes := [3]int{rng.Intn(50), 50 + rng.Intn(50), 100 + rng.Intn(50)}
+		indexes := make([]int, Batch*3)
+		for i := 0; i < Batch; i++ {
+			indexes[i*3] = rng.Intn(50)
+			indexes[i*3+1] = 50 + rng.Intn(50)
+			indexes[i*3+2] = 100 + rng.Intn(50)
+		}
 		for i := range in.Inputs {
 			for j := range in.Inputs[i] {
 				in.Inputs[i][j] = float32(data.Fisher[indexes[i]].Measures[j])
@@ -479,7 +486,7 @@ func main() {
 
 	search:
 		for work {
-			outputs := make([]Matrix, 3)
+			outputs := make([]Matrix, Batch*3)
 			for i := range outputs {
 				outputs[i] = NewMatrix(0, 3, 1)
 			}
