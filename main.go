@@ -110,7 +110,7 @@ func neuron1(seed int64, id int, in <-chan Inputs, out [3]chan<- Input, done cha
 				for j := range input.Inputs {
 					i := NewMatrix(0, 4, 1)
 					i.Data = append(i.Data, input.Inputs[j][:]...)
-					output := Step(Add(MulT(weights, i), bias))
+					output := Sigmoid(Add(MulT(weights, i), bias))
 					o.Input[j] = output.Data[0]
 				}
 				for j := range out {
@@ -428,7 +428,7 @@ func main() {
 					input.Data = append(input.Data, float32(v))
 				}
 
-				output := Step(Add(MulT(weights, input), bias))
+				output := Sigmoid(Add(MulT(weights, input), bias))
 				output = Sigmoid(Add(MulT(weights1, output), bias1))
 				max, index := float32(0.0), 0
 				for i, value := range output.Data {
