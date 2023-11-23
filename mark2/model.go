@@ -14,6 +14,12 @@ import (
 	. "github.com/pointlander/lucid/matrix"
 )
 
+// Random is a random variable
+type Random struct {
+	Mean   float32
+	StdDev float32
+}
+
 // Mark2 is the mark2 model
 func Mark2() {
 	rng := rand.New(rand.NewSource(1))
@@ -34,27 +40,93 @@ func Mark2() {
 		}
 	}
 
-	input := NewMatrix(0, 4, 1)
-	for _, value := range data.Fisher[0].Measures {
-		input.Data = append(input.Data, float32(value))
+	distribution := make([][]Random, 3)
+	for i := range distribution {
+		for j := 0; j < 4; j++ {
+			distribution[i] = append(distribution[i], Random{
+				Mean:   0,
+				StdDev: 1,
+			})
+		}
 	}
-	output := NewMatrix(0, 3, 256)
-	for i := 0; i < 256; i++ {
-		neurons := make([]Matrix, 3)
-		for j := range neurons {
-			neurons[j] = NewMatrix(0, 4, 1)
-			for k := 0; k < 4; k++ {
-				neurons[j].Data = append(neurons[j].Data, float32(rng.NormFloat64()))
+
+	for epoch := 0; epoch < 300; epoch++ {
+		input := NewMatrix(0, 4, 1)
+		for _, value := range data.Fisher[epoch%150].Measures {
+			input.Data = append(input.Data, float32(value))
+		}
+		output := NewMatrix(0, 3, 256)
+		type System struct {
+			Label   string
+			Entropy float32
+			Neurons []Matrix
+			Outputs Matrix
+		}
+		systems := make([]System, 0, 8)
+		for i := 0; i < 256; i++ {
+			neurons := make([]Matrix, 3)
+			for j := range neurons {
+				neurons[j] = NewMatrix(0, 4, 1)
+				for k := 0; k < 4; k++ {
+					neurons[j].Data = append(neurons[j].Data,
+						float32(rng.NormFloat64())*distribution[j][k].StdDev+distribution[j][k].Mean)
+				}
+			}
+			outputs := NewMatrix(0, 3, 1)
+			for j := range neurons {
+				out := MulT(neurons[j], input)
+				output.Data = append(output.Data, out.Data[0])
+				outputs.Data = append(outputs.Data, out.Data[0])
+			}
+			systems = append(systems, System{
+				Label:   data.Fisher[epoch%150].Label,
+				Neurons: neurons,
+				Outputs: outputs,
+			})
+		}
+		entropies := SelfEntropy(output, output, output)
+		for i, entropy := range entropies {
+			systems[i].Entropy = entropy
+		}
+		sort.Slice(entropies, func(i, j int) bool {
+			return systems[i].Entropy < systems[j].Entropy
+		})
+		fmt.Println(systems[0].Label, systems[0].Outputs.Data)
+		next := make([][]Random, 3)
+		for i := range next {
+			for j := 0; j < 4; j++ {
+				next[i] = append(next[i], Random{
+					Mean:   0,
+					StdDev: 0,
+				})
 			}
 		}
-		for j := range neurons {
-			out := MulT(neurons[j], input)
-			output.Data = append(output.Data, out.Data[0])
+		for i := range systems[:8] {
+			for j := range systems[i].Neurons {
+				for k, value := range systems[i].Neurons[j].Data {
+					next[j][k].Mean += value
+				}
+			}
 		}
+		for i := range next {
+			for j := range next[i] {
+				next[i][j].Mean /= 8
+			}
+		}
+		for i := range systems[:8] {
+			for j := range systems[i].Neurons {
+				for k, value := range systems[i].Neurons[j].Data {
+					diff := next[j][k].Mean - value
+					next[j][k].StdDev += diff * diff
+				}
+			}
+		}
+		for i := range next {
+			for j := range next[i] {
+				next[i][j].StdDev /= 8
+				next[i][j].StdDev = float32(math.Sqrt(float64(next[i][j].StdDev)))
+			}
+		}
+		distribution = next
 	}
-	entropies := SelfEntropy(output, output, output)
-	sort.Slice(entropies, func(i, j int) bool {
-		return entropies[i] < entropies[j]
-	})
-	fmt.Println(entropies)
 }
