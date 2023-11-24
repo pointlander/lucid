@@ -79,8 +79,13 @@ func Mark2() {
 			for j := range neurons {
 				neurons[j] = NewMatrix(0, Inputs, 1)
 				for k := 0; k < Inputs; k++ {
-					neurons[j].Data = append(neurons[j].Data,
-						float32(rng.NormFloat64())*distribution[j][k].StdDev+distribution[j][k].Mean)
+					v := float32(rng.NormFloat64())*distribution[j][k].StdDev + distribution[j][k].Mean
+					if v > 0 {
+						v = 1
+					} else {
+						v = -1
+					}
+					neurons[j].Data = append(neurons[j].Data, v)
 				}
 			}
 			outputs := NewMatrix(0, Outputs, 1)
