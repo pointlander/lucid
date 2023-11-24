@@ -61,12 +61,13 @@ func Mark2() {
 		}
 	}
 
-	for epoch := 0; epoch < 300; epoch++ {
+	length := len(data.Fisher)
+	for epoch := 0; epoch < 2*length; epoch++ {
 		input := NewMatrix(0, 4, 1)
-		for _, value := range data.Fisher[epoch%150].Measures {
+		for _, value := range data.Fisher[epoch%length].Measures {
 			input.Data = append(input.Data, float32(value))
 		}
-		label := data.Fisher[epoch%150].Label
+		label := data.Fisher[epoch%length].Label
 		output := NewMatrix(0, Outputs, Samples)
 		type System struct {
 			Entropy float32
