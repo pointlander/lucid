@@ -42,9 +42,9 @@ type Net struct {
 // NewNet makes a new network
 func NewNet(seed int64, inputs, outputs int) Net {
 	rng := rand.New(rand.NewSource(seed))
-	distribution := make([][]Random, Outputs)
+	distribution := make([][]Random, outputs)
 	for i := range distribution {
-		for j := 0; j < Inputs; j++ {
+		for j := 0; j < inputs; j++ {
 			distribution[i] = append(distribution[i], Random{
 				Mean:   0,
 				StdDev: 1,
@@ -69,14 +69,14 @@ type Sample struct {
 // Fire runs the network
 func (n *Net) Fire(input Matrix) Matrix {
 	rng, distribution := n.Rng, n.Distribution
-	output := NewMatrix(0, Outputs, Samples)
+	output := NewMatrix(0, n.Outputs, Samples)
 
 	systems := make([]Sample, 0, 8)
 	for i := 0; i < Samples; i++ {
-		neurons := make([]Matrix, Outputs)
+		neurons := make([]Matrix, n.Outputs)
 		for j := range neurons {
-			neurons[j] = NewMatrix(0, Inputs, 1)
-			for k := 0; k < Inputs; k++ {
+			neurons[j] = NewMatrix(0, n.Inputs, 1)
+			for k := 0; k < n.Inputs; k++ {
 				v := float32(rng.NormFloat64())*distribution[j][k].StdDev + distribution[j][k].Mean
 				if v > 0 {
 					v = 1
@@ -86,7 +86,7 @@ func (n *Net) Fire(input Matrix) Matrix {
 				neurons[j].Data = append(neurons[j].Data, v)
 			}
 		}
-		outputs := NewMatrix(0, Outputs, 1)
+		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
 			out := MulT(neurons[j], input)
 			output.Data = append(output.Data, out.Data[0])
@@ -104,9 +104,9 @@ func (n *Net) Fire(input Matrix) Matrix {
 	sort.Slice(entropies, func(i, j int) bool {
 		return systems[i].Entropy < systems[j].Entropy
 	})
-	next := make([][]Random, Outputs)
+	next := make([][]Random, n.Outputs)
 	for i := range next {
-		for j := 0; j < Inputs; j++ {
+		for j := 0; j < n.Inputs; j++ {
 			next[i] = append(next[i], Random{
 				Mean:   0,
 				StdDev: 0,
