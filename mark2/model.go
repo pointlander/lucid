@@ -31,31 +31,61 @@ type Random struct {
 	StdDev float32
 }
 
-// Net is a net
-type Net struct {
-	Inputs       int
-	Outputs      int
-	Rng          *rand.Rand
-	Distribution [][]Random
-}
+// Set is a set of statistics
+type Set [][]Random
 
-// NewNet makes a new network
-func NewNet(seed int64, inputs, outputs int) Net {
-	rng := rand.New(rand.NewSource(seed))
-	distribution := make([][]Random, outputs)
-	for i := range distribution {
+// NewStatistics generates a new statistics model
+func NewStatistics(inputs, outputs int) Set {
+	statistics := make(Set, outputs)
+	for i := range statistics {
 		for j := 0; j < inputs; j++ {
-			distribution[i] = append(distribution[i], Random{
+			statistics[i] = append(statistics[i], Random{
 				Mean:   0,
 				StdDev: 1,
 			})
 		}
 	}
+	return statistics
+}
+
+// Sample samples from the statistics
+func (s Set) Sample(rng *rand.Rand, inputs, outputs int) []Matrix {
+	neurons := make([]Matrix, outputs)
+	for j := range neurons {
+		neurons[j] = NewMatrix(0, inputs, 1)
+		for k := 0; k < inputs; k++ {
+			v := float32(rng.NormFloat64())*s[j][k].StdDev + s[j][k].Mean
+			if v > 0 {
+				v = 1
+			} else {
+				v = -1
+			}
+			neurons[j].Data = append(neurons[j].Data, v)
+		}
+	}
+	return neurons
+}
+
+// Net is a net
+type Net struct {
+	Inputs  int
+	Outputs int
+	Rng     *rand.Rand
+	Q       Set
+	K       Set
+	V       Set
+}
+
+// NewNet makes a new network
+func NewNet(seed int64, inputs, outputs int) Net {
+	rng := rand.New(rand.NewSource(seed))
 	return Net{
-		Inputs:       inputs,
-		Outputs:      outputs,
-		Rng:          rng,
-		Distribution: distribution,
+		Inputs:  inputs,
+		Outputs: outputs,
+		Rng:     rng,
+		Q:       NewStatistics(inputs, outputs),
+		K:       NewStatistics(inputs, outputs),
+		V:       NewStatistics(inputs, outputs),
 	}
 }
 
@@ -66,26 +96,53 @@ type Sample struct {
 	Outputs Matrix
 }
 
+// CalculateStatistics calculates the statistics of systems
+func (n Net) CalculateStatistics(systems []Sample) Set {
+	statistics := make(Set, n.Outputs)
+	for i := range statistics {
+		for j := 0; j < n.Inputs; j++ {
+			statistics[i] = append(statistics[i], Random{
+				Mean:   0,
+				StdDev: 0,
+			})
+		}
+	}
+	for i := range systems[:Window] {
+		for j := range systems[i].Neurons {
+			for k, value := range systems[i].Neurons[j].Data {
+				statistics[j][k].Mean += value
+			}
+		}
+	}
+	for i := range statistics {
+		for j := range statistics[i] {
+			statistics[i][j].Mean /= Window
+		}
+	}
+	for i := range systems[:Window] {
+		for j := range systems[i].Neurons {
+			for k, value := range systems[i].Neurons[j].Data {
+				diff := statistics[j][k].Mean - value
+				statistics[j][k].StdDev += diff * diff
+			}
+		}
+	}
+	for i := range statistics {
+		for j := range statistics[i] {
+			statistics[i][j].StdDev /= Window
+			statistics[i][j].StdDev = float32(math.Sqrt(float64(statistics[i][j].StdDev)))
+		}
+	}
+	return statistics
+}
+
 // Fire runs the network
 func (n *Net) Fire(input Matrix) Matrix {
-	rng, distribution := n.Rng, n.Distribution
 	output := NewMatrix(0, n.Outputs, Samples)
 
 	systems := make([]Sample, 0, 8)
 	for i := 0; i < Samples; i++ {
-		neurons := make([]Matrix, n.Outputs)
-		for j := range neurons {
-			neurons[j] = NewMatrix(0, n.Inputs, 1)
-			for k := 0; k < n.Inputs; k++ {
-				v := float32(rng.NormFloat64())*distribution[j][k].StdDev + distribution[j][k].Mean
-				if v > 0 {
-					v = 1
-				} else {
-					v = -1
-				}
-				neurons[j].Data = append(neurons[j].Data, v)
-			}
-		}
+		neurons := n.Q.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
 			out := MulT(neurons[j], input)
@@ -104,42 +161,8 @@ func (n *Net) Fire(input Matrix) Matrix {
 	sort.Slice(entropies, func(i, j int) bool {
 		return systems[i].Entropy < systems[j].Entropy
 	})
-	next := make([][]Random, n.Outputs)
-	for i := range next {
-		for j := 0; j < n.Inputs; j++ {
-			next[i] = append(next[i], Random{
-				Mean:   0,
-				StdDev: 0,
-			})
-		}
-	}
-	for i := range systems[:Window] {
-		for j := range systems[i].Neurons {
-			for k, value := range systems[i].Neurons[j].Data {
-				next[j][k].Mean += value
-			}
-		}
-	}
-	for i := range next {
-		for j := range next[i] {
-			next[i][j].Mean /= Window
-		}
-	}
-	for i := range systems[:Window] {
-		for j := range systems[i].Neurons {
-			for k, value := range systems[i].Neurons[j].Data {
-				diff := next[j][k].Mean - value
-				next[j][k].StdDev += diff * diff
-			}
-		}
-	}
-	for i := range next {
-		for j := range next[i] {
-			next[i][j].StdDev /= Window
-			next[i][j].StdDev = float32(math.Sqrt(float64(next[i][j].StdDev)))
-		}
-	}
-	n.Distribution = next
+
+	n.Q = n.CalculateStatistics(systems)
 	return systems[0].Outputs
 }
 
