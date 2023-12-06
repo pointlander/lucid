@@ -94,6 +94,7 @@ type Sample struct {
 	Entropy float32
 	Neurons []Matrix
 	Outputs Matrix
+	Out     Matrix
 }
 
 // CalculateStatistics calculates the statistics of systems
@@ -138,32 +139,74 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 
 // Fire runs the network
 func (n *Net) Fire(input Matrix) Matrix {
-	output := NewMatrix(0, n.Outputs, Samples)
-
-	systems := make([]Sample, 0, 8)
+	q := NewMatrix(0, n.Outputs, Samples)
+	k := NewMatrix(0, n.Outputs, Samples)
+	v := NewMatrix(0, n.Outputs, Samples)
+	systemsQ := make([]Sample, 0, 8)
+	systemsK := make([]Sample, 0, 8)
+	systemsV := make([]Sample, 0, 8)
 	for i := 0; i < Samples; i++ {
 		neurons := n.Q.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
 			out := MulT(neurons[j], input)
-			output.Data = append(output.Data, out.Data[0])
+			q.Data = append(q.Data, out.Data[0])
 			outputs.Data = append(outputs.Data, out.Data[0])
 		}
-		systems = append(systems, Sample{
+		systemsQ = append(systemsQ, Sample{
 			Neurons: neurons,
 			Outputs: outputs,
 		})
 	}
-	entropies := SelfEntropy(output, output, output)
-	for i, entropy := range entropies {
-		systems[i].Entropy = entropy
+	for i := 0; i < Samples; i++ {
+		neurons := n.K.Sample(n.Rng, n.Inputs, n.Outputs)
+		outputs := NewMatrix(0, n.Outputs, 1)
+		for j := range neurons {
+			out := MulT(neurons[j], input)
+			k.Data = append(k.Data, out.Data[0])
+			outputs.Data = append(outputs.Data, out.Data[0])
+		}
+		systemsK = append(systemsK, Sample{
+			Neurons: neurons,
+			Outputs: outputs,
+		})
 	}
-	sort.Slice(entropies, func(i, j int) bool {
-		return systems[i].Entropy < systems[j].Entropy
+	for i := 0; i < Samples; i++ {
+		neurons := n.V.Sample(n.Rng, n.Inputs, n.Outputs)
+		outputs := NewMatrix(0, n.Outputs, 1)
+		for j := range neurons {
+			out := MulT(neurons[j], input)
+			v.Data = append(v.Data, out.Data[0])
+			outputs.Data = append(outputs.Data, out.Data[0])
+		}
+		systemsV = append(systemsV, Sample{
+			Neurons: neurons,
+			Outputs: outputs,
+		})
+	}
+	outputs, entropies := SelfEntropy(q, k, v)
+	for i, entropy := range entropies {
+		systemsQ[i].Entropy = entropy
+		systemsQ[i].Out = outputs[i]
+		systemsK[i].Entropy = entropy
+		systemsQ[i].Out = outputs[i]
+		systemsV[i].Entropy = entropy
+		systemsQ[i].Out = outputs[i]
+	}
+	sort.Slice(systemsQ, func(i, j int) bool {
+		return systemsQ[i].Entropy < systemsQ[j].Entropy
+	})
+	sort.Slice(systemsK, func(i, j int) bool {
+		return systemsK[i].Entropy < systemsK[j].Entropy
+	})
+	sort.Slice(systemsV, func(i, j int) bool {
+		return systemsV[i].Entropy < systemsV[j].Entropy
 	})
 
-	n.Q = n.CalculateStatistics(systems)
-	return systems[0].Outputs
+	n.Q = n.CalculateStatistics(systemsQ)
+	n.K = n.CalculateStatistics(systemsK)
+	n.V = n.CalculateStatistics(systemsV)
+	return systemsV[0].Outputs
 }
 
 // Mark2 is the mark2 model

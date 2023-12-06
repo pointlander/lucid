@@ -215,8 +215,9 @@ func SelfAttention(Q, K, V Matrix) Matrix {
 }
 
 // SelfEntropy computes the self entropy of Q, K, V
-func SelfEntropy(Q, K, V Matrix) []float32 {
+func SelfEntropy(Q, K, V Matrix) ([]Matrix, []float32) {
 	entropies, values, results := make([]float32, V.Cols), make([]float32, K.Rows), make([]float32, 0, K.Rows)
+	outputs := make([]Matrix, 0, 8)
 	V = T(V)
 	for i := 0; i < K.Rows; i++ {
 		K := K.Data[i*K.Cols : (i+1)*K.Cols]
@@ -230,6 +231,9 @@ func SelfEntropy(Q, K, V Matrix) []float32 {
 			V := V.Data[j*V.Cols : (j+1)*V.Cols]
 			entropies[j] = dot(values, V)
 		}
+		output := NewMatrix(0, V.Cols, 1)
+		output.Data = append(output.Data, entropies...)
+		outputs = append(outputs, output)
 		softmax(entropies)
 
 		entropy := 0.0
@@ -238,7 +242,7 @@ func SelfEntropy(Q, K, V Matrix) []float32 {
 		}
 		results = append(results, float32(-entropy))
 	}
-	return results
+	return outputs, results
 }
 
 // EverettActivation is the everett complex activation function
