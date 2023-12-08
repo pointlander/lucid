@@ -22,7 +22,7 @@ const (
 	// Inputs is the number of inputs
 	Inputs = 4
 	// Outputs is the number of outputs
-	Outputs = 3
+	Outputs = 4
 )
 
 // Random is a random variable
@@ -206,7 +206,7 @@ func (n *Net) Fire(input Matrix) Matrix {
 	n.Q = n.CalculateStatistics(systemsQ)
 	n.K = n.CalculateStatistics(systemsK)
 	n.V = n.CalculateStatistics(systemsV)
-	return systemsK[0].Out
+	return systemsV[0].Outputs
 }
 
 // Mark2 is the mark2 model
