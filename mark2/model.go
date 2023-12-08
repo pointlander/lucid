@@ -189,9 +189,9 @@ func (n *Net) Fire(input Matrix) Matrix {
 		systemsQ[i].Entropy = entropy
 		systemsQ[i].Out = outputs[i]
 		systemsK[i].Entropy = entropy
-		systemsQ[i].Out = outputs[i]
+		systemsK[i].Out = outputs[i]
 		systemsV[i].Entropy = entropy
-		systemsQ[i].Out = outputs[i]
+		systemsV[i].Out = outputs[i]
 	}
 	sort.Slice(systemsQ, func(i, j int) bool {
 		return systemsQ[i].Entropy < systemsQ[j].Entropy
@@ -206,7 +206,7 @@ func (n *Net) Fire(input Matrix) Matrix {
 	n.Q = n.CalculateStatistics(systemsQ)
 	n.K = n.CalculateStatistics(systemsK)
 	n.V = n.CalculateStatistics(systemsV)
-	return systemsV[0].Outputs
+	return systemsK[0].Out
 }
 
 // Mark2 is the mark2 model
@@ -228,13 +228,60 @@ func Mark2() {
 	}
 	net := NewNet(1, Inputs, Outputs)
 	length := len(data.Fisher)
-	for epoch := 0; epoch < 2*length; epoch++ {
+	for epoch := 0; epoch < length; epoch++ {
 		input := NewMatrix(0, Inputs, 1)
-		for _, value := range data.Fisher[epoch%length].Measures {
+		for _, value := range data.Fisher[epoch].Measures {
 			input.Data = append(input.Data, float32(value))
 		}
-		label := data.Fisher[epoch%length].Label
+		label := data.Fisher[epoch].Label
 		output := net.Fire(input)
 		fmt.Println(label, output.Data)
 	}
+	nn := map[string][]float32{
+		"Iris-setosa":     nil,
+		"Iris-versicolor": nil,
+		"Iris-virginica":  nil,
+	}
+	for epoch := 0; epoch < length; epoch++ {
+		input := NewMatrix(0, Inputs, 1)
+		for _, value := range data.Fisher[epoch].Measures {
+			input.Data = append(input.Data, float32(value))
+		}
+		label := data.Fisher[epoch].Label
+		output := net.Fire(input)
+		fmt.Println(label, output.Data)
+		if value := nn[label]; value == nil {
+			nn[label] = output.Data
+		}
+	}
+	clusters := map[string][]int{
+		"Iris-setosa":     []int{},
+		"Iris-versicolor": []int{},
+		"Iris-virginica":  []int{},
+	}
+	for epoch := 0; epoch < length; epoch++ {
+		input := NewMatrix(0, Inputs, 1)
+		for _, value := range data.Fisher[epoch].Measures {
+			input.Data = append(input.Data, float32(value))
+		}
+		label := data.Fisher[epoch].Label
+		output := net.Fire(input)
+		fmt.Println(label, output.Data)
+		min, index := math.MaxFloat32, ""
+		for name, vector := range nn {
+			distance := 0.0
+			for j, value := range vector {
+				diff := float64(output.Data[j] - value)
+				distance += diff * diff
+			}
+			distance = math.Sqrt(distance)
+			if distance < min {
+				min, index = distance, name
+			}
+		}
+		list := clusters[index]
+		list = append(list, epoch)
+		clusters[index] = list
+	}
+	fmt.Println(clusters)
 }
