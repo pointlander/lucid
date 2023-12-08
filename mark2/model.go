@@ -310,11 +310,21 @@ func Mark2() {
 			graph.Link(uint64(i), uint64(j), distance)
 		}
 	}
-	ranks := make([]float64, 150)
+	type Rank struct {
+		Rank  float64
+		Index uint64
+	}
+	ranks := make([]Rank, 150)
 	graph.Rank(0.85, 0.000001, func(node uint64, rank float64) {
-		ranks[node] = rank
+		ranks[node] = Rank{
+			Rank:  rank,
+			Index: node,
+		}
 	})
-	for i, v := range ranks {
-		fmt.Println(i, v)
+	sort.Slice(ranks, func(i, j int) bool {
+		return ranks[i].Rank < ranks[j].Rank
+	})
+	for _, v := range ranks {
+		fmt.Println(v.Index, v.Rank)
 	}
 }
