@@ -138,7 +138,7 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 }
 
 // Fire runs the network
-func (n *Net) Fire(input Matrix) Matrix {
+func (n *Net) Fire(input Matrix) (float32, Matrix) {
 	q := NewMatrix(0, n.Outputs, Samples)
 	k := NewMatrix(0, n.Outputs, Samples)
 	v := NewMatrix(0, n.Outputs, Samples)
@@ -206,7 +206,7 @@ func (n *Net) Fire(input Matrix) Matrix {
 	n.Q = n.CalculateStatistics(systemsQ)
 	n.K = n.CalculateStatistics(systemsK)
 	n.V = n.CalculateStatistics(systemsV)
-	return systemsV[0].Outputs
+	return systemsV[0].Entropy, systemsV[0].Outputs
 }
 
 // Mark2 is the mark2 model
@@ -226,7 +226,8 @@ func Mark2() {
 			value.Measures[i] /= length
 		}
 	}
-	net := NewNet(1, Inputs, Outputs)
+	layer := NewNet(2, Inputs, 2*Inputs)
+	net := NewNet(1, 2*Inputs, Outputs)
 	length := len(data.Fisher)
 	for epoch := 0; epoch < length; epoch++ {
 		input := NewMatrix(0, Inputs, 1)
@@ -234,8 +235,9 @@ func Mark2() {
 			input.Data = append(input.Data, float32(value))
 		}
 		label := data.Fisher[epoch].Label
-		output := net.Fire(input)
-		fmt.Println(label, output.Data)
+		_, output := layer.Fire(input)
+		entropy, output := net.Fire(output)
+		fmt.Println(label, entropy, output.Data)
 	}
 	nn := map[string][]float32{
 		"Iris-setosa":     nil,
@@ -248,8 +250,9 @@ func Mark2() {
 			input.Data = append(input.Data, float32(value))
 		}
 		label := data.Fisher[epoch].Label
-		output := net.Fire(input)
-		fmt.Println(label, output.Data)
+		e, output := layer.Fire(input)
+		entropy, output := net.Fire(output)
+		fmt.Println(label, e, entropy, output.Data)
 		if value := nn[label]; value == nil {
 			nn[label] = output.Data
 		}
@@ -265,8 +268,9 @@ func Mark2() {
 			input.Data = append(input.Data, float32(value))
 		}
 		label := data.Fisher[epoch].Label
-		output := net.Fire(input)
-		fmt.Println(label, output.Data)
+		e, output := layer.Fire(input)
+		entropy, output := net.Fire(output)
+		fmt.Println(label, e, entropy, output.Data)
 		min, index := math.MaxFloat32, ""
 		for name, vector := range nn {
 			distance := 0.0
