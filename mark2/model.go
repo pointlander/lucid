@@ -12,6 +12,7 @@ import (
 
 	"github.com/pointlander/datum/iris"
 	. "github.com/pointlander/lucid/matrix"
+	"github.com/pointlander/pagerank"
 )
 
 const (
@@ -206,7 +207,11 @@ func (n *Net) Fire(input Matrix) (float32, Matrix) {
 	n.Q = n.CalculateStatistics(systemsQ)
 	n.K = n.CalculateStatistics(systemsK)
 	n.V = n.CalculateStatistics(systemsV)
-	return systemsV[0].Entropy, systemsV[0].Outputs
+	vector := NewMatrix(0, 3*n.Outputs, 1)
+	vector.Data = append(vector.Data, systemsQ[0].Outputs.Data...)
+	vector.Data = append(vector.Data, systemsK[0].Outputs.Data...)
+	vector.Data = append(vector.Data, systemsV[0].Outputs.Data...)
+	return systemsV[0].Entropy, vector //systemsV[0].Outputs
 }
 
 // Mark2 is the mark2 model
@@ -226,8 +231,9 @@ func Mark2() {
 			value.Measures[i] /= length
 		}
 	}
-	layer := NewNet(2, Inputs, 2*Inputs)
-	net := NewNet(1, 2*Inputs, Outputs)
+	//layer := NewNet(2, Inputs, 2*Inputs)
+	//net := NewNet(1, 2*Inputs, Outputs)
+	net := NewNet(1, Inputs, Outputs)
 	length := len(data.Fisher)
 	for epoch := 0; epoch < length; epoch++ {
 		input := NewMatrix(0, Inputs, 1)
@@ -235,8 +241,8 @@ func Mark2() {
 			input.Data = append(input.Data, float32(value))
 		}
 		label := data.Fisher[epoch].Label
-		_, output := layer.Fire(input)
-		entropy, output := net.Fire(output)
+		//_, output := layer.Fire(input)
+		entropy, output := net.Fire(input)
 		fmt.Println(label, entropy, output.Data)
 	}
 	nn := map[string][]float32{
@@ -250,9 +256,9 @@ func Mark2() {
 			input.Data = append(input.Data, float32(value))
 		}
 		label := data.Fisher[epoch].Label
-		e, output := layer.Fire(input)
-		entropy, output := net.Fire(output)
-		fmt.Println(label, e, entropy, output.Data)
+		//e, output := layer.Fire(input)
+		entropy, output := net.Fire(input)
+		fmt.Println(label, entropy, output.Data)
 		if value := nn[label]; value == nil {
 			nn[label] = output.Data
 		}
@@ -262,15 +268,17 @@ func Mark2() {
 		"Iris-versicolor": []int{},
 		"Iris-virginica":  []int{},
 	}
+	vectors := []Matrix{}
 	for epoch := 0; epoch < length; epoch++ {
 		input := NewMatrix(0, Inputs, 1)
 		for _, value := range data.Fisher[epoch].Measures {
 			input.Data = append(input.Data, float32(value))
 		}
 		label := data.Fisher[epoch].Label
-		e, output := layer.Fire(input)
-		entropy, output := net.Fire(output)
-		fmt.Println(label, e, entropy, output.Data)
+		//e, output := layer.Fire(input)
+		entropy, output := net.Fire(input)
+		vectors = append(vectors, output)
+		fmt.Println(label, entropy, output.Data)
 		min, index := math.MaxFloat32, ""
 		for name, vector := range nn {
 			distance := 0.0
@@ -288,4 +296,25 @@ func Mark2() {
 		clusters[index] = list
 	}
 	fmt.Println(clusters)
+
+	graph := pagerank.NewGraph64()
+	for i := 0; i < len(vectors); i++ {
+		for j := 0; j < len(vectors); j++ {
+			a, b := vectors[i], vectors[j]
+			distance := 0.0
+			for k, value := range a.Data {
+				diff := float64(b.Data[k] - value)
+				distance += diff * diff
+			}
+			distance = math.Sqrt(distance)
+			graph.Link(uint64(i), uint64(j), distance)
+		}
+	}
+	ranks := make([]float64, 150)
+	graph.Rank(0.85, 0.000001, func(node uint64, rank float64) {
+		ranks[node] = rank
+	})
+	for i, v := range ranks {
+		fmt.Println(i, v)
+	}
 }
