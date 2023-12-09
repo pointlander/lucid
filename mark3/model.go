@@ -18,19 +18,13 @@ func Mark3() {
 	for i := 0; i < 8*8; i++ {
 		a.Data = append(a.Data, float32(rng.NormFloat64()))
 	}
-	type Sample struct {
-		A    Matrix
-		AA   Matrix
-		Loss float32
-	}
 	min := float32(math.MaxFloat32)
 	for {
 		b := NewMatrix(0, 8, 8)
 		for i := 0; i < 8*8; i++ {
 			b.Data = append(b.Data, float32(rng.NormFloat64()))
 		}
-		ab := MulT(a, b)
-		ab = Normalize(ab)
+		ab := Normalize(MulT(a, b))
 		abab := Sub(a, MulT(ab, T(ab)))
 		sum := float32(0.0)
 		for _, value := range abab.Data {
