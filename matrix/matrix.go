@@ -99,6 +99,24 @@ func Add(m Matrix, n Matrix) Matrix {
 	return o
 }
 
+// Sub subtracts two float32 matrices
+func Sub(m Matrix, n Matrix) Matrix {
+	lena, lenb := len(m.Data), len(n.Data)
+	if lena%lenb != 0 {
+		panic(fmt.Errorf("%d %% %d != 0", lena, lenb))
+	}
+
+	o := Matrix{
+		Cols: m.Cols,
+		Rows: m.Rows,
+		Data: make([]float32, 0, m.Cols*m.Rows),
+	}
+	for i, value := range m.Data {
+		o.Data = append(o.Data, value-n.Data[i%lenb])
+	}
+	return o
+}
+
 // Sigmoid computes the sigmoid of a matrix
 func Sigmoid(m Matrix) Matrix {
 	o := Matrix{
