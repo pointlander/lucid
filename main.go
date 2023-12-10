@@ -6,10 +6,14 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"math/rand"
 
+	"github.com/pointlander/datum/iris"
 	"github.com/pointlander/lucid/mark1"
 	"github.com/pointlander/lucid/mark2"
 	"github.com/pointlander/lucid/mark3"
+	. "github.com/pointlander/lucid/matrix"
 )
 
 var (
@@ -34,4 +38,26 @@ func main() {
 		mark3.Mark3()
 		return
 	}
+
+	rng := rand.New(rand.NewSource(1))
+
+	data, err := iris.Load()
+	if err != nil {
+		panic(err)
+	}
+
+	vars := make([][]float32, 4)
+	for i := range vars {
+		for j := range data.Fisher {
+			vars[i] = append(vars[i], float32(data.Fisher[j].Measures[i]))
+		}
+	}
+	multi := Factor(vars, true)
+
+	for i := 0; i < 8; i++ {
+		sample := multi.Sample(rng)
+		fmt.Println(sample)
+	}
+	fmt.Println(multi.A.Data)
+
 }
