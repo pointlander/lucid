@@ -5,8 +5,13 @@
 package mark4
 
 import (
+	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"math"
 	"math/rand"
+	"os"
 	"sort"
 
 	. "github.com/pointlander/lucid/matrix"
@@ -17,10 +22,12 @@ const (
 	Window = 8
 	// Samples is the number of samples
 	Samples = 256
+	// Size is the size of the filter
+	Size = 64
 	// Inputs is the number of inputs
-	Inputs = 4
+	Inputs = Size * Size
 	// Outputs is the number of outputs
-	Outputs = 4
+	Outputs = 8
 )
 
 // Random is a random variable
@@ -204,14 +211,57 @@ func (n *Net) Fire(input Matrix) (float32, Matrix) {
 	n.Q = n.CalculateStatistics(systemsQ)
 	n.K = n.CalculateStatistics(systemsK)
 	n.V = n.CalculateStatistics(systemsV)
-	vector := NewMatrix(0, 3*n.Outputs, 1)
+	/*vector := NewMatrix(0, 3*n.Outputs, 1)
 	vector.Data = append(vector.Data, systemsQ[0].Outputs.Data...)
 	vector.Data = append(vector.Data, systemsK[0].Outputs.Data...)
-	vector.Data = append(vector.Data, systemsV[0].Outputs.Data...)
-	return systemsV[0].Entropy, vector //systemsV[0].Outputs
+	vector.Data = append(vector.Data, systemsV[0].Outputs.Data...)*/
+	return systemsV[0].Entropy, systemsV[0].Outputs
 }
 
 // Mark4 is the mark4 model
 func Mark4() {
-
+	input, err := os.Open("test.jpg")
+	if err != nil {
+		panic(err)
+	}
+	defer input.Close()
+	img, err := jpeg.Decode(input)
+	if err != nil {
+		panic(err)
+	}
+	size := img.Bounds().Size()
+	gray := image.NewGray(image.Rect(0, 0, size.X/Size, size.Y/Size))
+	net := NewNet(1, Inputs, Outputs)
+	fmt.Println(size)
+	for i := 0; i < size.X; i += Size {
+		for j := 0; j < size.Y; j += Size {
+			input := NewMatrix(0, Inputs, 1)
+			for x := 0; x < Size; x++ {
+				for y := 0; y < Size; y++ {
+					original := img.At(i+x, j+y)
+					pixel := color.GrayModel.Convert(original)
+					r, _, _, _ := pixel.RGBA()
+					input.Data = append(input.Data, float32(r))
+				}
+			}
+			_, value := net.Fire(input)
+			pixel := color.Gray{}
+			for i, v := range value.Data {
+				if v > 0 {
+					pixel.Y |= 1 << i
+				}
+			}
+			gray.Set(i/Size, j/Size, pixel)
+			fmt.Println(i, j)
+		}
+	}
+	output, err := os.Create("output.jpg")
+	if err != nil {
+		panic(err)
+	}
+	defer output.Close()
+	err = jpeg.Encode(output, gray, nil)
+	if err != nil {
+		panic(err)
+	}
 }
