@@ -25,7 +25,7 @@ const (
 	// Size is the size of the filter
 	Size = 64
 	// Inputs is the number of inputs
-	Inputs = Size * Size
+	Inputs = Size
 	// Outputs is the number of outputs
 	Outputs = 8
 )
@@ -220,6 +220,7 @@ func (n *Net) Fire(input Matrix) (float32, Matrix) {
 
 // Mark4 is the mark4 model
 func Mark4() {
+	rng := rand.New(rand.NewSource(1))
 	input, err := os.Open("test.jpg")
 	if err != nil {
 		panic(err)
@@ -230,28 +231,54 @@ func Mark4() {
 		panic(err)
 	}
 	size := img.Bounds().Size()
-	gray := image.NewGray(image.Rect(0, 0, size.X/Size, size.Y/Size))
-	net := NewNet(1, Inputs, Outputs)
+	out := image.NewRGBA(image.Rect(0, 0, size.X/Size, size.Y/Size))
+	red := NewNet(1, Inputs, Outputs)
+	green := NewNet(1, Inputs, Outputs)
+	blue := NewNet(1, Inputs, Outputs)
 	fmt.Println(size)
+	type Coord struct {
+		X int
+		Y int
+	}
+	samples := make([]Coord, Size)
+	for i := range samples {
+		samples[i].X = rng.Intn(Size)
+		samples[i].Y = rng.Intn(Size)
+	}
 	for i := 0; i < size.X; i += Size {
 		for j := 0; j < size.Y; j += Size {
-			input := NewMatrix(0, Inputs, 1)
-			for x := 0; x < Size; x++ {
-				for y := 0; y < Size; y++ {
-					original := img.At(i+x, j+y)
-					pixel := color.GrayModel.Convert(original)
-					r, _, _, _ := pixel.RGBA()
-					input.Data = append(input.Data, float32(r))
-				}
+			rinput := NewMatrix(0, Inputs, 1)
+			ginput := NewMatrix(0, Inputs, 1)
+			binput := NewMatrix(0, Inputs, 1)
+			for _, coord := range samples {
+				original := img.At(i+coord.X, j+coord.Y)
+				r, g, b, _ := original.RGBA()
+				rinput.Data = append(rinput.Data, float32(r)/65535)
+				ginput.Data = append(ginput.Data, float32(g)/65535)
+				binput.Data = append(binput.Data, float32(b)/65535)
 			}
-			_, value := net.Fire(input)
-			pixel := color.Gray{}
+			pixel := color.RGBA{
+				A: 255,
+			}
+			_, value := red.Fire(rinput)
 			for i, v := range value.Data {
 				if v > 0 {
-					pixel.Y |= 1 << i
+					pixel.R |= 1 << i
 				}
 			}
-			gray.Set(i/Size, j/Size, pixel)
+			_, value = green.Fire(ginput)
+			for i, v := range value.Data {
+				if v > 0 {
+					pixel.G |= 1 << i
+				}
+			}
+			_, value = blue.Fire(binput)
+			for i, v := range value.Data {
+				if v > 0 {
+					pixel.B |= 1 << i
+				}
+			}
+			out.Set(i/Size, j/Size, pixel)
 			fmt.Println(i, j)
 		}
 	}
@@ -260,7 +287,7 @@ func Mark4() {
 		panic(err)
 	}
 	defer output.Close()
-	err = jpeg.Encode(output, gray, nil)
+	err = jpeg.Encode(output, out, nil)
 	if err != nil {
 		panic(err)
 	}
