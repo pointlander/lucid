@@ -234,10 +234,8 @@ func Mark4() {
 		panic(err)
 	}
 	size := img.Bounds().Size()
-	out := image.NewRGBA(image.Rect(0, 0, size.X/Size, size.Y/Size))
-	red := NewNet(1, Inputs, Outputs)
-	green := NewNet(1, Inputs, Outputs)
-	blue := NewNet(1, Inputs, Outputs)
+	out := image.NewGray(image.Rect(0, 0, size.X/Size, size.Y/Size))
+	net := NewNet(1, 3*Inputs, Outputs)
 	fmt.Println(size)
 	type Coord struct {
 		X int
@@ -250,35 +248,20 @@ func Mark4() {
 	}
 	for i := 0; i < size.X; i += Size {
 		for j := 0; j < size.Y; j += Size {
-			rinput := NewMatrix(0, Inputs, 1)
-			ginput := NewMatrix(0, Inputs, 1)
-			binput := NewMatrix(0, Inputs, 1)
+			input := NewMatrix(0, 3*Inputs, 1)
 			for _, coord := range samples {
-				original := img.At(i+coord.X, j+coord.Y)
-				r, g, b, _ := original.RGBA()
-				rinput.Data = append(rinput.Data, float32(r)/65535)
-				ginput.Data = append(ginput.Data, float32(g)/65535)
-				binput.Data = append(binput.Data, float32(b)/65535)
+				pixel := img.At(i+coord.X, j+coord.Y)
+				r, g, b, _ := pixel.RGBA()
+				y, cb, cr := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
+				input.Data = append(input.Data, float32(y)/255)
+				input.Data = append(input.Data, float32(cb)/255)
+				input.Data = append(input.Data, float32(cr)/255)
 			}
-			pixel := color.RGBA{
-				A: 255,
-			}
-			_, value := red.Fire(rinput)
+			pixel := color.Gray{}
+			_, value := net.Fire(input)
 			for i, v := range value.Data {
 				if v > 0 {
-					pixel.R |= 1 << i
-				}
-			}
-			_, value = green.Fire(ginput)
-			for i, v := range value.Data {
-				if v > 0 {
-					pixel.G |= 1 << i
-				}
-			}
-			_, value = blue.Fire(binput)
-			for i, v := range value.Data {
-				if v > 0 {
-					pixel.B |= 1 << i
+					pixel.Y |= 1 << i
 				}
 			}
 			out.Set(i/Size, j/Size, pixel)

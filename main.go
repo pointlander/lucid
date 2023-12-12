@@ -26,6 +26,8 @@ var (
 	FlagMark3 = flag.Bool("mark3", false, "mark3 model")
 	// FlagMark4 is the mark4 model
 	FlagMark4 = flag.Bool("mark4", false, "mark4 model")
+	// FlagMark4a is the mark4 model
+	FlagMark4a = flag.Bool("mark4a", false, "mark4a model")
 )
 
 func main() {
@@ -41,6 +43,9 @@ func main() {
 		mark3.Mark3()
 		return
 	} else if *FlagMark4 {
+		mark4.Mark4()
+		return
+	} else if *FlagMark4a {
 		mark4.Mark4a()
 		return
 	}
