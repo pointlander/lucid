@@ -309,7 +309,7 @@ func Mark4a() {
 	}
 	size := img.Bounds().Size()
 
-	net := NewNet(1, 8*8, 32)
+	net := NewNet(1, 3*8*8, 32)
 
 	var images []*image.Paletted
 	opts := gif.Options{
@@ -326,13 +326,15 @@ func Mark4a() {
 	}
 	for i := 0; i < 256; i++ {
 		fmt.Println(i)
-		input := NewMatrix(0, 8*8, 1)
+		input := NewMatrix(0, 3*8*8, 1)
 		for a := 0; a < 8; a++ {
 			for b := 0; b < 8; b++ {
 				pixel := img.At((x+a)%size.X, (y+b)%size.Y)
-				sample := color.GrayModel.Convert(pixel)
-				g, _, _, _ := sample.RGBA()
-				input.Data = append(input.Data, float32(g)/65535)
+				r, g, b, _ := pixel.RGBA()
+				y, cb, cr := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
+				input.Data = append(input.Data, float32(y)/255)
+				input.Data = append(input.Data, float32(cb)/255)
+				input.Data = append(input.Data, float32(cr)/255)
 			}
 		}
 		_, output := net.Fire(input)
