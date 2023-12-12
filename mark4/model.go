@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/color/palette"
+	"image/draw"
+	"image/gif"
 	"image/jpeg"
 	"math"
 	"math/rand"
@@ -291,4 +294,75 @@ func Mark4() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// Mark4a is the mark4a model
+func Mark4a() {
+	input, err := os.Open("test.jpg")
+	if err != nil {
+		panic(err)
+	}
+	defer input.Close()
+	img, err := jpeg.Decode(input)
+	if err != nil {
+		panic(err)
+	}
+	size := img.Bounds().Size()
+
+	net := NewNet(1, 8*8, 32)
+
+	var images []*image.Paletted
+	opts := gif.Options{
+		NumColors: 256,
+		Drawer:    draw.FloydSteinberg,
+	}
+	bounds := img.Bounds()
+	x, y := 0, 0
+	paletted := image.NewPaletted(bounds, palette.Plan9[:opts.NumColors])
+	for x := 0; x < size.X; x++ {
+		for y := 0; y < size.Y; y++ {
+			paletted.SetColorIndex(x, y, 255)
+		}
+	}
+	for i := 0; i < 256; i++ {
+		fmt.Println(i)
+		input := NewMatrix(0, 8*8, 1)
+		for a := 0; a < 8; a++ {
+			for b := 0; b < 8; b++ {
+				pixel := img.At((x+a)%size.X, (y+b)%size.Y)
+				sample := color.GrayModel.Convert(pixel)
+				g, _, _, _ := sample.RGBA()
+				input.Data = append(input.Data, float32(g)/65535)
+			}
+		}
+		_, output := net.Fire(input)
+		x, y = 0, 0
+		for j := 0; j < 16; j++ {
+			if output.Data[j] > 0 {
+				x |= 1 << j
+			}
+		}
+		for j := 0; j < 16; j++ {
+			if output.Data[j+16] > 0 {
+				y |= 1 << j
+			}
+		}
+		for a := 0; a < 16; a++ {
+			for b := 0; b < 16; b++ {
+				paletted.SetColorIndex((a+x)%size.X, (b+y)%size.Y, 8)
+			}
+		}
+		cp := image.NewPaletted(bounds, palette.Plan9[:opts.NumColors])
+		copy(cp.Pix, paletted.Pix)
+		images = append(images, cp)
+	}
+	animation := &gif.GIF{}
+	for _, paletted := range images {
+		animation.Image = append(animation.Image, paletted)
+		animation.Delay = append(animation.Delay, 50)
+	}
+
+	f, _ := os.OpenFile("test.gif", os.O_WRONLY|os.O_CREATE, 0600)
+	defer f.Close()
+	gif.EncodeAll(f, animation)
 }

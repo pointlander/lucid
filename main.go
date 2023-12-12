@@ -41,7 +41,7 @@ func main() {
 		mark3.Mark3()
 		return
 	} else if *FlagMark4 {
-		mark4.Mark4()
+		mark4.Mark4a()
 		return
 	}
 
