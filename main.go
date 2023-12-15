@@ -14,6 +14,7 @@ import (
 	"github.com/pointlander/lucid/mark2"
 	"github.com/pointlander/lucid/mark3"
 	"github.com/pointlander/lucid/mark4"
+	"github.com/pointlander/lucid/mark5"
 	. "github.com/pointlander/lucid/matrix"
 )
 
@@ -26,8 +27,10 @@ var (
 	FlagMark3 = flag.Bool("mark3", false, "mark3 model")
 	// FlagMark4 is the mark4 model
 	FlagMark4 = flag.Bool("mark4", false, "mark4 model")
-	// FlagMark4a is the mark4 model
+	// FlagMark4a is the mark4a model
 	FlagMark4a = flag.Bool("mark4a", false, "mark4a model")
+	// FlagMark5 is the mark5 model
+	FlagMark5 = flag.Bool("mark5", false, "mark5 model")
 )
 
 func main() {
@@ -47,6 +50,9 @@ func main() {
 		return
 	} else if *FlagMark4a {
 		mark4.Mark4a()
+		return
+	} else if *FlagMark5 {
+		mark5.Mark5()
 		return
 	}
 
