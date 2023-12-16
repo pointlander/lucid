@@ -30,17 +30,17 @@ type Random struct {
 // Mark5 is the mark5 model
 func Mark5() {
 	rng := rand.New(rand.NewSource(1))
-	dist := make([]Random, 0, Size+2*Width)
-	factor := float32(math.Sqrt(2.0 / float64(Width)))
-	for i := 0; i < Size+2*Width; i++ {
-		dist = append(dist, Random{
-			Mean:   0,
-			StdDev: factor,
-		})
-	}
-	values := make(plotter.Values, 0, 1024)
 
-	for e := 0; e < 1024; e++ {
+	values := make(plotter.Values, 0, 1024)
+	for e := 0; e < 1; e++ {
+		dist := make([]Random, 0, Size+2*Width)
+		factor := float32(math.Sqrt(2.0 / float64(Width)))
+		for i := 0; i < Size+2*Width; i++ {
+			dist = append(dist, Random{
+				Mean:   float32(rng.NormFloat64()),
+				StdDev: float32(rng.NormFloat64()) * factor,
+			})
+		}
 		model := NewMatrix(0, Width, Width)
 		for i := range dist[:Size] {
 			model.Data = append(model.Data, dist[i].StdDev*float32(rng.NormFloat64())+dist[i].Mean)
@@ -54,11 +54,12 @@ func Mark5() {
 			bias.Data = append(bias.Data, dist[Size+Width+i].StdDev*float32(rng.NormFloat64())+dist[Size+Width+i].Mean)
 		}
 		for i := 0; i < 1024; i++ {
-			output := Sigmoid(Add(MulT(model, input), bias))
+			output := Sigmoid(Add(MulT(model, Normalize(input)), bias))
 			for _, value := range output.Data {
 				values = append(values, float64(value))
 			}
 			copy(input.Data, output.Data)
+			input.Data[0] = factor * float32(rng.NormFloat64())
 		}
 	}
 
