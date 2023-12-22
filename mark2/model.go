@@ -36,9 +36,9 @@ type Set []Random
 
 // NewStatistics generates a new statistics model
 func NewStatistics(inputs, outputs int) Set {
-	statistics := make(Set, 0, outputs)
+	statistics := make(Set, 0, inputs*inputs)
 	factor := float32(math.Sqrt(2.0 / float64(inputs)))
-	for j := 0; j < inputs; j++ {
+	for j := 0; j < inputs*inputs; j++ {
 		statistics = append(statistics, Random{
 			Mean:   0,
 			StdDev: factor,
@@ -112,7 +112,7 @@ type Sample struct {
 // CalculateStatistics calculates the statistics of systems
 func (n Net) CalculateStatistics(systems [][]Sample) Set {
 	system := systems[0]
-	statistics := make(Set, n.Outputs)
+	statistics := make(Set, n.Inputs*n.Inputs)
 	for i := range system[:Window] {
 		for j, value := range system[i].Model.Data {
 			statistics[j].Mean += value
