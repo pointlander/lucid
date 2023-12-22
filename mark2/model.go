@@ -32,38 +32,53 @@ type Random struct {
 }
 
 // Set is a set of statistics
-type Set [][]Random
+type Set []Random
 
 // NewStatistics generates a new statistics model
 func NewStatistics(inputs, outputs int) Set {
-	statistics := make(Set, outputs)
-	for i := range statistics {
-		for j := 0; j < inputs; j++ {
-			statistics[i] = append(statistics[i], Random{
-				Mean:   0,
-				StdDev: 1,
-			})
-		}
+	statistics := make(Set, 0, outputs)
+	factor := float32(math.Sqrt(2.0 / float64(inputs)))
+	for j := 0; j < inputs; j++ {
+		statistics = append(statistics, Random{
+			Mean:   0,
+			StdDev: factor,
+		})
 	}
 	return statistics
 }
 
 // Sample samples from the statistics
-func (s Set) Sample(rng *rand.Rand, inputs, outputs int) []Matrix {
-	neurons := make([]Matrix, outputs)
-	for j := range neurons {
-		neurons[j] = NewMatrix(0, inputs, 1)
-		for k := 0; k < inputs; k++ {
-			v := float32(rng.NormFloat64())*s[j][k].StdDev + s[j][k].Mean
-			if v > 0 {
-				v = 1
-			} else {
-				v = -1
+func (s Set) Sample(rng *rand.Rand, inputs, outputs int) (Matrix, [][]Matrix) {
+	neurons := make([][]Matrix, 3)
+	factor := float32(math.Sqrt(2.0 / float64(inputs)))
+	model := NewMatrix(0, inputs, inputs)
+	for i := range s {
+		model.Data = append(model.Data, s[i].StdDev*float32(rng.NormFloat64())+s[i].Mean)
+	}
+	input := NewMatrix(0, inputs, 1)
+	for i := 0; i < inputs; i++ {
+		input.Data = append(input.Data, factor*float32(rng.NormFloat64()))
+	}
+	for i := range neurons {
+		neurons[i] = make([]Matrix, outputs)
+	}
+	for j := 0; j < outputs; j++ {
+		for i := range neurons {
+			neurons[i][j] = NewMatrix(0, inputs, 1)
+			output := Sigmoid(MulT(model, Normalize(input)))
+			for _, v := range output.Data {
+				if v > .5 {
+					v = 1
+				} else {
+					v = -1
+				}
+				neurons[i][j].Data = append(neurons[i][j].Data, v)
 			}
-			neurons[j].Data = append(neurons[j].Data, v)
+			copy(input.Data, output.Data)
+			input.Data[0] = factor * float32(rng.NormFloat64())
 		}
 	}
-	return neurons
+	return model, neurons
 }
 
 // Net is a net
@@ -71,9 +86,7 @@ type Net struct {
 	Inputs  int
 	Outputs int
 	Rng     *rand.Rand
-	Q       Set
-	K       Set
-	V       Set
+	D       Set
 }
 
 // NewNet makes a new network
@@ -83,134 +96,89 @@ func NewNet(seed int64, inputs, outputs int) Net {
 		Inputs:  inputs,
 		Outputs: outputs,
 		Rng:     rng,
-		Q:       NewStatistics(inputs, outputs),
-		K:       NewStatistics(inputs, outputs),
-		V:       NewStatistics(inputs, outputs),
+		D:       NewStatistics(inputs, outputs),
 	}
 }
 
 // Sample is a sample of a random neural network
 type Sample struct {
 	Entropy float32
-	Neurons []Matrix
+	Neurons [][]Matrix
+	Model   Matrix
 	Outputs Matrix
 	Out     Matrix
 }
 
 // CalculateStatistics calculates the statistics of systems
-func (n Net) CalculateStatistics(systems []Sample) Set {
+func (n Net) CalculateStatistics(systems [][]Sample) Set {
+	system := systems[0]
 	statistics := make(Set, n.Outputs)
-	for i := range statistics {
-		for j := 0; j < n.Inputs; j++ {
-			statistics[i] = append(statistics[i], Random{
-				Mean:   0,
-				StdDev: 0,
-			})
-		}
-	}
-	for i := range systems[:Window] {
-		for j := range systems[i].Neurons {
-			for k, value := range systems[i].Neurons[j].Data {
-				statistics[j][k].Mean += value
-			}
+	for i := range system[:Window] {
+		for j, value := range system[i].Model.Data {
+			statistics[j].Mean += value
 		}
 	}
 	for i := range statistics {
-		for j := range statistics[i] {
-			statistics[i][j].Mean /= Window
-		}
+		statistics[i].Mean /= Window
 	}
-	for i := range systems[:Window] {
-		for j := range systems[i].Neurons {
-			for k, value := range systems[i].Neurons[j].Data {
-				diff := statistics[j][k].Mean - value
-				statistics[j][k].StdDev += diff * diff
-			}
+	for i := range system[:Window] {
+		for j, value := range system[i].Model.Data {
+			diff := statistics[j].Mean - value
+			statistics[j].StdDev += diff * diff
 		}
 	}
 	for i := range statistics {
-		for j := range statistics[i] {
-			statistics[i][j].StdDev /= Window
-			statistics[i][j].StdDev = float32(math.Sqrt(float64(statistics[i][j].StdDev)))
-		}
+		statistics[i].StdDev /= Window
+		statistics[i].StdDev = float32(math.Sqrt(float64(statistics[i].StdDev)))
 	}
 	return statistics
 }
 
 // Fire runs the network
 func (n *Net) Fire(input Matrix) (float32, Matrix) {
-	q := NewMatrix(0, n.Outputs, Samples)
-	k := NewMatrix(0, n.Outputs, Samples)
-	v := NewMatrix(0, n.Outputs, Samples)
-	systemsQ := make([]Sample, 0, 8)
-	systemsK := make([]Sample, 0, 8)
-	systemsV := make([]Sample, 0, 8)
-	for i := 0; i < Samples; i++ {
-		neurons := n.Q.Sample(n.Rng, n.Inputs, n.Outputs)
-		outputs := NewMatrix(0, n.Outputs, 1)
-		for j := range neurons {
-			out := MulT(neurons[j], input)
-			q.Data = append(q.Data, out.Data[0])
-			outputs.Data = append(outputs.Data, out.Data[0])
-		}
-		systemsQ = append(systemsQ, Sample{
-			Neurons: neurons,
-			Outputs: outputs,
-		})
+	x := make([]Matrix, 3)
+	for i := range x {
+		x[i] = NewMatrix(0, n.Outputs, Samples)
+	}
+	systems := make([][]Sample, 3)
+	for i := range systems {
+		systems[i] = make([]Sample, 0, 8)
 	}
 	for i := 0; i < Samples; i++ {
-		neurons := n.K.Sample(n.Rng, n.Inputs, n.Outputs)
-		outputs := NewMatrix(0, n.Outputs, 1)
+		model, neurons := n.D.Sample(n.Rng, n.Inputs, n.Outputs)
 		for j := range neurons {
-			out := MulT(neurons[j], input)
-			k.Data = append(k.Data, out.Data[0])
-			outputs.Data = append(outputs.Data, out.Data[0])
+			outputs := NewMatrix(0, n.Outputs, 1)
+			for k := range neurons[j] {
+				out := MulT(neurons[j][k], input)
+				x[j].Data = append(x[j].Data, out.Data[0])
+				outputs.Data = append(outputs.Data, out.Data[0])
+			}
+			systems[j] = append(systems[j], Sample{
+				Neurons: neurons,
+				Outputs: outputs,
+				Model:   model,
+			})
 		}
-		systemsK = append(systemsK, Sample{
-			Neurons: neurons,
-			Outputs: outputs,
-		})
 	}
-	for i := 0; i < Samples; i++ {
-		neurons := n.V.Sample(n.Rng, n.Inputs, n.Outputs)
-		outputs := NewMatrix(0, n.Outputs, 1)
-		for j := range neurons {
-			out := MulT(neurons[j], input)
-			v.Data = append(v.Data, out.Data[0])
-			outputs.Data = append(outputs.Data, out.Data[0])
-		}
-		systemsV = append(systemsV, Sample{
-			Neurons: neurons,
-			Outputs: outputs,
-		})
-	}
-	outputs, entropies := SelfEntropy(q, k, v)
+	outputs, entropies := SelfEntropy(x[0], x[1], x[2])
 	for i, entropy := range entropies {
-		systemsQ[i].Entropy = entropy
-		systemsQ[i].Out = outputs[i]
-		systemsK[i].Entropy = entropy
-		systemsK[i].Out = outputs[i]
-		systemsV[i].Entropy = entropy
-		systemsV[i].Out = outputs[i]
+		for j := range systems {
+			systems[j][i].Entropy = entropy
+			systems[j][i].Out = outputs[i]
+		}
 	}
-	sort.Slice(systemsQ, func(i, j int) bool {
-		return systemsQ[i].Entropy < systemsQ[j].Entropy
-	})
-	sort.Slice(systemsK, func(i, j int) bool {
-		return systemsK[i].Entropy < systemsK[j].Entropy
-	})
-	sort.Slice(systemsV, func(i, j int) bool {
-		return systemsV[i].Entropy < systemsV[j].Entropy
-	})
+	for s := range systems {
+		sort.Slice(systems[s], func(i, j int) bool {
+			return systems[s][i].Entropy < systems[s][j].Entropy
+		})
+	}
 
-	n.Q = n.CalculateStatistics(systemsQ)
-	n.K = n.CalculateStatistics(systemsK)
-	n.V = n.CalculateStatistics(systemsV)
+	n.D = n.CalculateStatistics(systems)
 	vector := NewMatrix(0, 3*n.Outputs, 1)
-	vector.Data = append(vector.Data, systemsQ[0].Outputs.Data...)
-	vector.Data = append(vector.Data, systemsK[0].Outputs.Data...)
-	vector.Data = append(vector.Data, systemsV[0].Outputs.Data...)
-	return systemsV[0].Entropy, vector //systemsV[0].Outputs
+	for s := range systems {
+		vector.Data = append(vector.Data, systems[s][0].Outputs.Data...)
+	}
+	return systems[2][0].Entropy, vector //systemsV[0].Outputs
 }
 
 // Mark2 is the mark2 model
