@@ -12,7 +12,6 @@ import (
 
 	"github.com/pointlander/datum/iris"
 	. "github.com/pointlander/lucid/matrix"
-	"github.com/pointlander/pagerank"
 )
 
 const (
@@ -297,7 +296,7 @@ func Mark2() {
 	}
 	fmt.Println(clusters)
 
-	graph := pagerank.NewGraph64()
+	/*graph := pagerank.NewGraph64()
 	for i := 0; i < len(vectors); i++ {
 		for j := 0; j < len(vectors); j++ {
 			a, b := vectors[i], vectors[j]
@@ -326,5 +325,5 @@ func Mark2() {
 	})
 	for _, v := range ranks {
 		fmt.Println(v.Index, v.Rank)
-	}
+	}*/
 }

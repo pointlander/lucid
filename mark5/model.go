@@ -33,9 +33,9 @@ func Mark5() {
 
 	values := make(plotter.Values, 0, 1024)
 	for e := 0; e < 1; e++ {
-		dist := make([]Random, 0, Size+2*Width)
+		dist := make([]Random, 0, Size)
 		factor := float32(math.Sqrt(2.0 / float64(Width)))
-		for i := 0; i < Size+2*Width; i++ {
+		for i := 0; i < Size; i++ {
 			dist = append(dist, Random{
 				Mean:   float32(rng.NormFloat64()),
 				StdDev: float32(rng.NormFloat64()) * factor,
@@ -47,14 +47,10 @@ func Mark5() {
 		}
 		input := NewMatrix(0, Width, 1)
 		for i := 0; i < Width; i++ {
-			input.Data = append(input.Data, dist[Size+i].StdDev*float32(rng.NormFloat64())+dist[Size+i].Mean)
-		}
-		bias := NewMatrix(0, Width, 1)
-		for i := 0; i < Width; i++ {
-			bias.Data = append(bias.Data, dist[Size+Width+i].StdDev*float32(rng.NormFloat64())+dist[Size+Width+i].Mean)
+			input.Data = append(input.Data, factor*float32(rng.NormFloat64()))
 		}
 		for i := 0; i < 1024; i++ {
-			output := Sigmoid(Add(MulT(model, Normalize(input)), bias))
+			output := Sigmoid(MulT(model, Normalize(input)))
 			for _, value := range output.Data {
 				values = append(values, float64(value))
 			}
