@@ -232,16 +232,21 @@ func Mark2() {
 	}
 	//layer := NewNet(2, Inputs, 2*Inputs)
 	//net := NewNet(1, 2*Inputs, Outputs)
-	net := NewNet(1, Inputs, Outputs)
+	net := NewNet(1, Inputs+1, Outputs)
 	length := len(data.Fisher)
 	for epoch := 0; epoch < length; epoch++ {
-		input := NewMatrix(0, Inputs, 1)
+		input := NewMatrix(0, Inputs+1, 1)
 		for _, value := range data.Fisher[epoch].Measures {
 			input.Data = append(input.Data, float32(value))
 		}
+		input.Data = append(input.Data, 0)
 		label := data.Fisher[epoch].Label
 		//_, output := layer.Fire(input)
 		entropy, output := net.Fire(input)
+		fmt.Println(label, entropy, output.Data)
+		copy(input.Data, output.Data)
+		input.Data[4] = 1
+		entropy, output = net.Fire(input)
 		fmt.Println(label, entropy, output.Data)
 	}
 	nn := map[string][]float32{
@@ -250,13 +255,18 @@ func Mark2() {
 		"Iris-virginica":  nil,
 	}
 	for epoch := 0; epoch < length; epoch++ {
-		input := NewMatrix(0, Inputs, 1)
+		input := NewMatrix(0, Inputs+1, 1)
 		for _, value := range data.Fisher[epoch].Measures {
 			input.Data = append(input.Data, float32(value))
 		}
+		input.Data = append(input.Data, 0)
 		label := data.Fisher[epoch].Label
 		//e, output := layer.Fire(input)
 		entropy, output := net.Fire(input)
+		fmt.Println(label, entropy, output.Data)
+		copy(input.Data, output.Data)
+		input.Data[4] = 1
+		entropy, output = net.Fire(input)
 		fmt.Println(label, entropy, output.Data)
 		if value := nn[label]; value == nil {
 			nn[label] = output.Data
@@ -269,13 +279,17 @@ func Mark2() {
 	}
 	vectors := []Matrix{}
 	for epoch := 0; epoch < length; epoch++ {
-		input := NewMatrix(0, Inputs, 1)
+		input := NewMatrix(0, Inputs+1, 1)
 		for _, value := range data.Fisher[epoch].Measures {
 			input.Data = append(input.Data, float32(value))
 		}
+		input.Data = append(input.Data, 0)
 		label := data.Fisher[epoch].Label
 		//e, output := layer.Fire(input)
 		entropy, output := net.Fire(input)
+		copy(input.Data, output.Data)
+		input.Data[4] = 1
+		entropy, output = net.Fire(input)
 		vectors = append(vectors, output)
 		fmt.Println(label, entropy, output.Data)
 		min, index := math.MaxFloat32, ""
