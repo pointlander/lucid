@@ -16,7 +16,7 @@ import (
 
 const (
 	// Window is the window size
-	Window = 8
+	Window = 4
 	// Samples is the number of samples
 	Samples = 256
 	// Inputs is the number of inputs
@@ -138,7 +138,7 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 }
 
 // Fire runs the network
-func (n *Net) Fire(input Matrix) (float32, Matrix) {
+func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 	q := NewMatrix(0, n.Outputs, Samples)
 	k := NewMatrix(0, n.Outputs, Samples)
 	v := NewMatrix(0, n.Outputs, Samples)
@@ -149,7 +149,7 @@ func (n *Net) Fire(input Matrix) (float32, Matrix) {
 		neurons := n.Q.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
-			out := MulT(neurons[j], input)
+			out := MulT(neurons[j], query)
 			q.Data = append(q.Data, out.Data[0])
 			outputs.Data = append(outputs.Data, out.Data[0])
 		}
@@ -162,7 +162,7 @@ func (n *Net) Fire(input Matrix) (float32, Matrix) {
 		neurons := n.K.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
-			out := MulT(neurons[j], input)
+			out := MulT(neurons[j], key)
 			k.Data = append(k.Data, out.Data[0])
 			outputs.Data = append(outputs.Data, out.Data[0])
 		}
@@ -175,7 +175,7 @@ func (n *Net) Fire(input Matrix) (float32, Matrix) {
 		neurons := n.V.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
-			out := MulT(neurons[j], input)
+			out := MulT(neurons[j], value)
 			v.Data = append(v.Data, out.Data[0])
 			outputs.Data = append(outputs.Data, out.Data[0])
 		}
@@ -206,11 +206,7 @@ func (n *Net) Fire(input Matrix) (float32, Matrix) {
 	n.Q = n.CalculateStatistics(systemsQ)
 	n.K = n.CalculateStatistics(systemsK)
 	n.V = n.CalculateStatistics(systemsV)
-	vector := NewMatrix(0, 3*n.Outputs, 1)
-	vector.Data = append(vector.Data, systemsQ[0].Outputs.Data...)
-	vector.Data = append(vector.Data, systemsK[0].Outputs.Data...)
-	vector.Data = append(vector.Data, systemsV[0].Outputs.Data...)
-	return systemsV[0].Entropy, vector //systemsV[0].Outputs
+	return systemsV[0].Entropy, systemsQ[0].Outputs, systemsK[0].Outputs, systemsV[0].Outputs
 }
 
 // Mark2 is the mark2 model
@@ -235,68 +231,92 @@ func Mark2() {
 	net := NewNet(1, Inputs+1, Outputs)
 	length := len(data.Fisher)
 	for epoch := 0; epoch < length; epoch++ {
-		input := NewMatrix(0, Inputs+1, 1)
+		query := NewMatrix(0, Inputs+1, 1)
 		for _, value := range data.Fisher[epoch].Measures {
-			input.Data = append(input.Data, float32(value))
+			query.Data = append(query.Data, float32(value))
 		}
-		input.Data = append(input.Data, 0)
+		query.Data = append(query.Data, 0)
+		key := NewMatrix(0, Inputs+1, 1)
+		for _, value := range data.Fisher[epoch].Measures {
+			key.Data = append(key.Data, float32(value))
+		}
+		key.Data = append(key.Data, 0)
+		value := NewMatrix(0, Inputs+1, 1)
+		for _, v := range data.Fisher[epoch].Measures {
+			value.Data = append(value.Data, float32(v))
+		}
+		value.Data = append(value.Data, 0)
 		label := data.Fisher[epoch].Label
 		//_, output := layer.Fire(input)
-		entropy, output := net.Fire(input)
-		fmt.Println(label, entropy, output.Data)
-		copy(input.Data, output.Data)
-		input.Data[4] = 1
-		entropy, output = net.Fire(input)
-		fmt.Println(label, entropy, output.Data)
+		entropy, q, k, v := net.Fire(query, key, value)
+		fmt.Println(label, entropy, v.Data)
+		copy(query.Data, q.Data)
+		query.Data[4] = 1
+		copy(key.Data, k.Data)
+		key.Data[4] = 1
+		copy(value.Data, v.Data)
+		value.Data[4] = 1
+		entropy, q, k, v = net.Fire(query, key, value)
+		fmt.Println(label, entropy, v.Data)
 	}
-	nn := map[string][]float32{
-		"Iris-setosa":     nil,
-		"Iris-versicolor": nil,
-		"Iris-virginica":  nil,
+	nn := map[string][6][]float32{
+		"Iris-setosa":     [6][]float32{},
+		"Iris-versicolor": [6][]float32{},
+		"Iris-virginica":  [6][]float32{},
 	}
 	for epoch := 0; epoch < length; epoch++ {
-		input := NewMatrix(0, Inputs+1, 1)
+		query := NewMatrix(0, Inputs+1, 1)
 		for _, value := range data.Fisher[epoch].Measures {
-			input.Data = append(input.Data, float32(value))
+			query.Data = append(query.Data, float32(value))
 		}
-		input.Data = append(input.Data, 0)
+		query.Data = append(query.Data, 0)
+		key := NewMatrix(0, Inputs+1, 1)
+		for _, value := range data.Fisher[epoch].Measures {
+			key.Data = append(key.Data, float32(value))
+		}
+		key.Data = append(key.Data, 0)
+		value := NewMatrix(0, Inputs+1, 1)
+		for _, v := range data.Fisher[epoch].Measures {
+			value.Data = append(value.Data, float32(v))
+		}
+		value.Data = append(value.Data, 0)
 		label := data.Fisher[epoch].Label
 		//e, output := layer.Fire(input)
-		entropy, output := net.Fire(input)
-		fmt.Println(label, entropy, output.Data)
-		copy(input.Data, output.Data)
-		input.Data[4] = 1
-		entropy, output = net.Fire(input)
-		fmt.Println(label, entropy, output.Data)
-		if value := nn[label]; value == nil {
-			nn[label] = output.Data
+		entropy, q, k, v := net.Fire(query, key, value)
+		if value := nn[label]; value[0] == nil {
+			value[0] = q.Data
+			value[1] = k.Data
+			value[2] = v.Data
+			nn[label] = value
+		}
+		fmt.Println(label, entropy, v.Data)
+		copy(query.Data, q.Data)
+		query.Data[4] = 1
+		copy(key.Data, k.Data)
+		key.Data[4] = 1
+		copy(value.Data, v.Data)
+		value.Data[4] = 1
+		entropy, q, k, v = net.Fire(query, key, value)
+		fmt.Println(label, entropy, v.Data)
+		if value := nn[label]; value[3] == nil {
+			value[3] = q.Data
+			value[4] = k.Data
+			value[5] = v.Data
+			nn[label] = value
 		}
 	}
-	clusters := map[string][]int{
-		"Iris-setosa":     []int{},
-		"Iris-versicolor": []int{},
-		"Iris-virginica":  []int{},
+	clusters := map[string][150]int{
+		"Iris-setosa":     [150]int{},
+		"Iris-versicolor": [150]int{},
+		"Iris-virginica":  [150]int{},
 	}
-	vectors := []Matrix{}
-	for epoch := 0; epoch < length; epoch++ {
-		input := NewMatrix(0, Inputs+1, 1)
-		for _, value := range data.Fisher[epoch].Measures {
-			input.Data = append(input.Data, float32(value))
-		}
-		input.Data = append(input.Data, 0)
-		label := data.Fisher[epoch].Label
-		//e, output := layer.Fire(input)
-		entropy, output := net.Fire(input)
-		copy(input.Data, output.Data)
-		input.Data[4] = 1
-		entropy, output = net.Fire(input)
-		vectors = append(vectors, output)
-		fmt.Println(label, entropy, output.Data)
+	//vectors := []Matrix{}
+	search := func(query Matrix, epoch, a int) {
 		min, index := math.MaxFloat32, ""
-		for name, vector := range nn {
+		for name, set := range nn {
 			distance := 0.0
-			for j, value := range vector {
-				diff := float64(output.Data[j] - value)
+			for j, value := range set[a] {
+				diff := float64(query.Data[j] - value)
 				distance += diff * diff
 			}
 			distance = math.Sqrt(distance)
@@ -305,10 +325,62 @@ func Mark2() {
 			}
 		}
 		list := clusters[index]
-		list = append(list, epoch)
+		list[epoch]++
 		clusters[index] = list
 	}
+	for epoch := 0; epoch < length; epoch++ {
+		query := NewMatrix(0, Inputs+1, 1)
+		for _, value := range data.Fisher[epoch].Measures {
+			query.Data = append(query.Data, float32(value))
+		}
+		query.Data = append(query.Data, 0)
+		key := NewMatrix(0, Inputs+1, 1)
+		for _, value := range data.Fisher[epoch].Measures {
+			key.Data = append(key.Data, float32(value))
+		}
+		key.Data = append(key.Data, 0)
+		value := NewMatrix(0, Inputs+1, 1)
+		for _, v := range data.Fisher[epoch].Measures {
+			value.Data = append(value.Data, float32(v))
+		}
+		value.Data = append(value.Data, 0)
+		label := data.Fisher[epoch].Label
+		//e, output := layer.Fire(input)
+		entropy, q, k, v := net.Fire(query, key, value)
+		search(q, epoch, 0)
+		search(k, epoch, 1)
+		search(v, epoch, 2)
+		copy(query.Data, q.Data)
+		query.Data[4] = 1
+		copy(key.Data, k.Data)
+		key.Data[4] = 1
+		copy(value.Data, v.Data)
+		value.Data[4] = 1
+		entropy, q, k, v = net.Fire(query, key, value)
+		//vectors = append(vectors, output)
+		fmt.Println(label, entropy, v.Data)
+		search(q, epoch, 3)
+		search(k, epoch, 4)
+		search(v, epoch, 5)
+	}
+	results := map[string][]int{
+		"Iris-setosa":     []int{},
+		"Iris-versicolor": []int{},
+		"Iris-virginica":  []int{},
+	}
+	for i := 0; i < 150; i++ {
+		max, name := 0, ""
+		for k, v := range clusters {
+			if v[i] > max {
+				max, name = v[i], k
+			}
+		}
+		list := results[name]
+		list = append(list, i)
+		results[name] = list
+	}
 	fmt.Println(clusters)
+	fmt.Println(results)
 
 	/*graph := pagerank.NewGraph64()
 	for i := 0; i < len(vectors); i++ {
