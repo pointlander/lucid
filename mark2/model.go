@@ -16,7 +16,9 @@ import (
 
 const (
 	// Window is the window size
-	Window = 4
+	Window = 8
+	// Rate is the learning rate
+	Rate = .3
 	// Samples is the number of samples
 	Samples = 256
 	// Inputs is the number of inputs
@@ -203,20 +205,46 @@ func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 		return systemsV[i].Entropy < systemsV[j].Entropy
 	})
 
-	n.Q = n.CalculateStatistics(systemsQ)
-	n.K = n.CalculateStatistics(systemsK)
-	n.V = n.CalculateStatistics(systemsV)
+	nq := n.CalculateStatistics(systemsQ)
+	for i, v := range nq {
+		for j, vv := range v {
+			n.Q[i][j].Mean = (1-Rate)*n.Q[i][j].Mean + Rate*vv.Mean
+			n.Q[i][j].StdDev = (1-Rate)*n.Q[i][j].StdDev + Rate*vv.StdDev
+		}
+	}
+	nk := n.CalculateStatistics(systemsK)
+	for i, v := range nk {
+		for j, vv := range v {
+			n.K[i][j].Mean = (1-Rate)*n.K[i][j].Mean + Rate*vv.Mean
+			n.K[i][j].StdDev = (1-Rate)*n.K[i][j].StdDev + Rate*vv.StdDev
+		}
+	}
+	nv := n.CalculateStatistics(systemsV)
+	for i, v := range nv {
+		for j, vv := range v {
+			n.V[i][j].Mean = (1-Rate)*n.V[i][j].Mean + Rate*vv.Mean
+			n.V[i][j].StdDev = (1-Rate)*n.V[i][j].StdDev + Rate*vv.StdDev
+		}
+	}
+
 	return systemsV[0].Entropy, systemsQ[0].Outputs, systemsK[0].Outputs, systemsV[0].Outputs
 }
 
 // Mark2 is the mark2 model
 func Mark2() {
+	rng := rand.New(rand.NewSource(1))
 	data, err := iris.Load()
 	if err != nil {
 		panic(err)
 	}
 
-	for _, value := range data.Fisher {
+	type Iris struct {
+		iris.Iris
+		I int
+	}
+	flowers := make([]Iris, len(data.Fisher))
+
+	for i, value := range data.Fisher {
 		sum := 0.0
 		for _, v := range value.Measures {
 			sum += v * v
@@ -225,28 +253,32 @@ func Mark2() {
 		for i := range value.Measures {
 			value.Measures[i] /= length
 		}
+		flowers[i].Iris = value
+		flowers[i].I = i
 	}
 	//layer := NewNet(2, Inputs, 2*Inputs)
 	//net := NewNet(1, 2*Inputs, Outputs)
+	perm := rng.Perm(len(flowers))
 	net := NewNet(1, Inputs+1, Outputs)
 	length := len(data.Fisher)
 	for epoch := 0; epoch < length; epoch++ {
+		index := perm[epoch]
 		query := NewMatrix(0, Inputs+1, 1)
-		for _, value := range data.Fisher[epoch].Measures {
+		for _, value := range flowers[index].Measures {
 			query.Data = append(query.Data, float32(value))
 		}
 		query.Data = append(query.Data, 0)
 		key := NewMatrix(0, Inputs+1, 1)
-		for _, value := range data.Fisher[epoch].Measures {
+		for _, value := range flowers[index].Measures {
 			key.Data = append(key.Data, float32(value))
 		}
 		key.Data = append(key.Data, 0)
 		value := NewMatrix(0, Inputs+1, 1)
-		for _, v := range data.Fisher[epoch].Measures {
+		for _, v := range flowers[index].Measures {
 			value.Data = append(value.Data, float32(v))
 		}
 		value.Data = append(value.Data, 0)
-		label := data.Fisher[epoch].Label
+		label := flowers[index].Label
 		//_, output := layer.Fire(input)
 		entropy, q, k, v := net.Fire(query, key, value)
 		fmt.Println(label, entropy, v.Data)
@@ -264,23 +296,25 @@ func Mark2() {
 		"Iris-versicolor": [6][]float32{},
 		"Iris-virginica":  [6][]float32{},
 	}
+	perm = rng.Perm(len(flowers))
 	for epoch := 0; epoch < length; epoch++ {
+		index := perm[epoch]
 		query := NewMatrix(0, Inputs+1, 1)
-		for _, value := range data.Fisher[epoch].Measures {
+		for _, value := range flowers[index].Measures {
 			query.Data = append(query.Data, float32(value))
 		}
 		query.Data = append(query.Data, 0)
 		key := NewMatrix(0, Inputs+1, 1)
-		for _, value := range data.Fisher[epoch].Measures {
+		for _, value := range flowers[index].Measures {
 			key.Data = append(key.Data, float32(value))
 		}
 		key.Data = append(key.Data, 0)
 		value := NewMatrix(0, Inputs+1, 1)
-		for _, v := range data.Fisher[epoch].Measures {
+		for _, v := range flowers[index].Measures {
 			value.Data = append(value.Data, float32(v))
 		}
 		value.Data = append(value.Data, 0)
-		label := data.Fisher[epoch].Label
+		label := flowers[index].Label
 		//e, output := layer.Fire(input)
 		entropy, q, k, v := net.Fire(query, key, value)
 		if value := nn[label]; value[0] == nil {
@@ -328,28 +362,30 @@ func Mark2() {
 		list[epoch]++
 		clusters[index] = list
 	}
+	perm = rng.Perm(len(flowers))
 	for epoch := 0; epoch < length; epoch++ {
+		index := perm[epoch]
 		query := NewMatrix(0, Inputs+1, 1)
-		for _, value := range data.Fisher[epoch].Measures {
+		for _, value := range flowers[index].Measures {
 			query.Data = append(query.Data, float32(value))
 		}
 		query.Data = append(query.Data, 0)
 		key := NewMatrix(0, Inputs+1, 1)
-		for _, value := range data.Fisher[epoch].Measures {
+		for _, value := range flowers[index].Measures {
 			key.Data = append(key.Data, float32(value))
 		}
 		key.Data = append(key.Data, 0)
 		value := NewMatrix(0, Inputs+1, 1)
-		for _, v := range data.Fisher[epoch].Measures {
+		for _, v := range flowers[index].Measures {
 			value.Data = append(value.Data, float32(v))
 		}
 		value.Data = append(value.Data, 0)
-		label := data.Fisher[epoch].Label
+		label := flowers[index].Label
 		//e, output := layer.Fire(input)
 		entropy, q, k, v := net.Fire(query, key, value)
-		search(q, epoch, 0)
-		search(k, epoch, 1)
-		search(v, epoch, 2)
+		search(q, index, 0)
+		search(k, index, 1)
+		search(v, index, 2)
 		copy(query.Data, q.Data)
 		query.Data[4] = 1
 		copy(key.Data, k.Data)
@@ -359,9 +395,9 @@ func Mark2() {
 		entropy, q, k, v = net.Fire(query, key, value)
 		//vectors = append(vectors, output)
 		fmt.Println(label, entropy, v.Data)
-		search(q, epoch, 3)
-		search(k, epoch, 4)
-		search(v, epoch, 5)
+		search(q, index, 3)
+		search(k, index, 4)
+		search(v, index, 5)
 	}
 	results := map[string][]int{
 		"Iris-setosa":     []int{},
