@@ -6,12 +6,17 @@ package mark2
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"math/rand"
 	"sort"
 
 	"github.com/pointlander/datum/iris"
 	. "github.com/pointlander/lucid/matrix"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
 )
 
 const (
@@ -26,6 +31,12 @@ const (
 	// Outputs is the number of outputs
 	Outputs = 4
 )
+
+var colors = [...]color.RGBA{
+	{R: 0xff, G: 0x00, B: 0x00, A: 255},
+	{R: 0x00, G: 0xff, B: 0x00, A: 255},
+	{R: 0x00, G: 0x00, B: 0xff, A: 255},
+}
 
 // Random is a random variable
 type Random struct {
@@ -260,6 +271,7 @@ func Mark2() {
 	//net := NewNet(1, 2*Inputs, Outputs)
 	perm := rng.Perm(len(flowers))
 	net := NewNet(1, Inputs+1, Outputs)
+	projection := NewNet(2, Outputs, 2)
 	length := len(data.Fisher)
 	for epoch := 0; epoch < length; epoch++ {
 		index := perm[epoch]
@@ -281,6 +293,7 @@ func Mark2() {
 		label := flowers[index].Label
 		//_, output := layer.Fire(input)
 		entropy, q, k, v := net.Fire(query, key, value)
+		projection.Fire(q, k, v)
 		fmt.Println(label, entropy, v.Data)
 		copy(query.Data, q.Data)
 		query.Data[4] = 1
@@ -289,6 +302,7 @@ func Mark2() {
 		copy(value.Data, v.Data)
 		value.Data[4] = 1
 		entropy, q, k, v = net.Fire(query, key, value)
+		projection.Fire(q, k, v)
 		fmt.Println(label, entropy, v.Data)
 	}
 	nn := map[string][6][]float32{
@@ -317,6 +331,7 @@ func Mark2() {
 		label := flowers[index].Label
 		//e, output := layer.Fire(input)
 		entropy, q, k, v := net.Fire(query, key, value)
+		projection.Fire(q, k, v)
 		if value := nn[label]; value[0] == nil {
 			value[0] = q.Data
 			value[1] = k.Data
@@ -331,6 +346,7 @@ func Mark2() {
 		copy(value.Data, v.Data)
 		value.Data[4] = 1
 		entropy, q, k, v = net.Fire(query, key, value)
+		projection.Fire(q, k, v)
 		fmt.Println(label, entropy, v.Data)
 		if value := nn[label]; value[3] == nil {
 			value[3] = q.Data
@@ -363,6 +379,7 @@ func Mark2() {
 		clusters[index] = list
 	}
 	perm = rng.Perm(len(flowers))
+	points := make(plotter.XYs, len(flowers))
 	for epoch := 0; epoch < length; epoch++ {
 		index := perm[epoch]
 		query := NewMatrix(0, Inputs+1, 1)
@@ -383,6 +400,7 @@ func Mark2() {
 		label := flowers[index].Label
 		//e, output := layer.Fire(input)
 		entropy, q, k, v := net.Fire(query, key, value)
+		projection.Fire(q, k, v)
 		search(q, index, 0)
 		search(k, index, 1)
 		search(v, index, 2)
@@ -393,6 +411,8 @@ func Mark2() {
 		copy(value.Data, v.Data)
 		value.Data[4] = 1
 		entropy, q, k, v = net.Fire(query, key, value)
+		_, _, _, point := projection.Fire(q, k, v)
+		points[index] = plotter.XY{X: float64(point.Data[0]), Y: float64(point.Data[1])}
 		//vectors = append(vectors, output)
 		fmt.Println(label, entropy, v.Data)
 		search(q, index, 3)
@@ -417,6 +437,39 @@ func Mark2() {
 	}
 	fmt.Println(clusters)
 	fmt.Println(results)
+
+	p := plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = "iris"
+	p.X.Label.Text = "x"
+	p.Y.Label.Text = "y"
+	p.Legend.Top = true
+
+	c := 0
+	for key, value := range results {
+		set := make(plotter.XYs, 0, 50)
+		for _, point := range value {
+			set = append(set, points[point])
+		}
+		scatter, err := plotter.NewScatter(set)
+		if err != nil {
+			panic(err)
+		}
+		scatter.GlyphStyle.Radius = vg.Length(1)
+		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+		scatter.GlyphStyle.Color = colors[c]
+		p.Add(scatter)
+		p.Legend.Add(key, scatter)
+		c++
+	}
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "projection.png")
+	if err != nil {
+		panic(err)
+	}
 
 	/*graph := pagerank.NewGraph64()
 	for i := 0; i < len(vectors); i++ {
