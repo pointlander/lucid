@@ -227,6 +227,18 @@ func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 	return systemsV[0].Entropy, systemsQ[0].Outputs, systemsK[0].Outputs, systemsV[0].Outputs
 }
 
+// Iris is a iris data point
+type Iris struct {
+	iris.Iris
+	I         int
+	Embedding []float32
+}
+
+// GaussianCluster is a gaussian clustering algorithm
+func GaussianCluster(flowers []Iris) {
+
+}
+
 // Mark2 is the mark2 model
 func Mark2() {
 	rng := rand.New(rand.NewSource(1))
@@ -235,10 +247,6 @@ func Mark2() {
 		panic(err)
 	}
 
-	type Iris struct {
-		iris.Iris
-		I int
-	}
 	flowers := make([]Iris, len(data.Fisher))
 
 	for i, value := range data.Fisher {
@@ -397,6 +405,9 @@ func Mark2() {
 		copy(value.Data, v.Data)
 		value.Data[4] = 1
 		entropy, q, k, v = net.Fire(query, key, value)
+		flowers[index].Embedding = append(flowers[index].Embedding, q.Data...)
+		flowers[index].Embedding = append(flowers[index].Embedding, k.Data...)
+		flowers[index].Embedding = append(flowers[index].Embedding, v.Data...)
 		_, _, _, point := projection.Fire(q, k, v)
 		points[index] = plotter.XY{X: float64(point.Data[0]), Y: float64(point.Data[1])}
 		//vectors = append(vectors, output)
@@ -423,6 +434,8 @@ func Mark2() {
 	}
 	fmt.Println(clusters)
 	fmt.Println(results)
+
+	GaussianCluster(flowers)
 
 	p := plot.New()
 	if err != nil {
