@@ -30,6 +30,8 @@ const (
 	Inputs = 4
 	// Outputs is the number of outputs
 	Outputs = 4
+	// Embedding is the embedding size
+	Embedding = 3 * 4
 	// Clusters is the number of clusters
 	Clusters = 3
 )
@@ -240,7 +242,7 @@ type Iris struct {
 // GaussianCluster is a gaussian clustering algorithm
 func GaussianCluster(flowers []Iris) {
 	rng := rand.New(rand.NewSource(1))
-	a := make([]Random, Outputs*Clusters*len(flowers))
+	a := make([]Random, Embedding*Clusters*len(flowers))
 	for i := range a {
 		a[i].StdDev = 1
 	}
@@ -250,7 +252,7 @@ func GaussianCluster(flowers []Iris) {
 	}
 	samples := make([]Sample, 256)
 	for i := range samples {
-		samples[i].S = make([]float32, Outputs*Clusters*len(flowers))
+		samples[i].S = make([]float32, Embedding*Clusters*len(flowers))
 	}
 	for i := 0; i < 256; i++ {
 		for j := range samples {
@@ -259,27 +261,27 @@ func GaussianCluster(flowers []Iris) {
 				samples[j].S[k] = d.StdDev*float32(rng.NormFloat64()) + d.Mean
 				samples[j].V = 0
 			}
-			var clusters [Outputs * Clusters]Random
-			var out [Outputs]Random
-			for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
-				for o := 0; o < Outputs*Clusters; o += Clusters {
+			var clusters [Embedding * Clusters]Random
+			var out [Embedding]Random
+			for k := 0; k < Embedding*Clusters*len(flowers); k += Embedding * Clusters {
+				for o := 0; o < Embedding*Clusters; o += Clusters {
 					outsider := true
 					for l := 0; l < Clusters; l++ {
 						if samples[j].S[k+o+l] > 0 {
-							clusters[o+l].Mean += flowers[k/(Outputs*Clusters)].Embedding[o/Clusters]
+							clusters[o+l].Mean += flowers[k/(Embedding*Clusters)].Embedding[o/Clusters]
 							clusters[o+l].Count++
 							outsider = false
 						}
 					}
 					if outsider {
-						out[o/Clusters].Mean += flowers[k/(Outputs*3)].Embedding[o/3]
+						out[o/Clusters].Mean += flowers[k/(Embedding*3)].Embedding[o/3]
 						out[o/Clusters].Count++
 					}
 				}
 			}
 
-			for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
-				for o := 0; o < Outputs*Clusters; o += Clusters {
+			for k := 0; k < Embedding*Clusters*len(flowers); k += Embedding * Clusters {
+				for o := 0; o < Embedding*Clusters; o += Clusters {
 					outsider := true
 					for l := 0; l < Clusters; l++ {
 						if samples[j].S[k+o+l] > 0 {
@@ -293,25 +295,25 @@ func GaussianCluster(flowers []Iris) {
 				}
 			}
 
-			for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
-				for o := 0; o < Outputs*Clusters; o += Clusters {
+			for k := 0; k < Embedding*Clusters*len(flowers); k += Embedding * Clusters {
+				for o := 0; o < Embedding*Clusters; o += Clusters {
 					outsider := true
 					for l := 0; l < Clusters; l++ {
 						if samples[j].S[k+o+l] > 0 {
-							diff := flowers[k/(Outputs*Clusters)].Embedding[o/Clusters] - clusters[o+l].Mean
+							diff := flowers[k/(Embedding*Clusters)].Embedding[o/Clusters] - clusters[o+l].Mean
 							clusters[o+l].StdDev += diff * diff
 							outsider = false
 						}
 					}
 					if outsider {
-						diff := flowers[k/(Outputs*Clusters)].Embedding[o/Clusters] - out[o/Clusters].Mean
+						diff := flowers[k/(Embedding*Clusters)].Embedding[o/Clusters] - out[o/Clusters].Mean
 						out[o/Clusters].StdDev += diff * diff
 					}
 				}
 			}
 
-			for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
-				for o := 0; o < Outputs*Clusters; o += Clusters {
+			for k := 0; k < Embedding*Clusters*len(flowers); k += Embedding * Clusters {
+				for o := 0; o < Embedding*Clusters; o += Clusters {
 					outsider := true
 					for l := 0; l < Clusters; l++ {
 						if samples[j].S[k+o+l] > 0 {
@@ -342,7 +344,7 @@ func GaussianCluster(flowers []Iris) {
 		})
 		fmt.Println(samples[0].V)
 
-		aa := make([]Random, Outputs*Clusters*len(flowers))
+		aa := make([]Random, Embedding*Clusters*len(flowers))
 		weights, sum := make([]float32, Window), float32(0)
 		for i := range weights {
 			sum += 1 / samples[i].V
@@ -371,8 +373,8 @@ func GaussianCluster(flowers []Iris) {
 		a = aa
 	}
 
-	for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
-		for j, value := range a[k : k+Outputs*Clusters] {
+	for k := 0; k < Embedding*Clusters*len(flowers); k += Embedding * Clusters {
+		for j, value := range a[k : k+Embedding*Clusters] {
 			if value.Mean > 0 {
 				fmt.Printf("1 ")
 			} else {
