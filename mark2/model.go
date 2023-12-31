@@ -239,6 +239,25 @@ type Iris struct {
 	Embedding []float32
 }
 
+// ImprovedGaussianCluster is a gaussian clustering algorithm
+func ImprovedGaussianCluster(flowers []Iris) {
+	type Cluster struct {
+		E Set
+		U []Random
+	}
+	clusters := [Clusters]Cluster{}
+	for i := range clusters {
+		clusters[i].E = make(Set, Embedding)
+		for j := range clusters[i].E {
+			row := make([]Random, Embedding)
+			for k := range row {
+				row[k].StdDev = 1
+			}
+			clusters[i].E[j] = row
+		}
+	}
+}
+
 // GaussianCluster is a gaussian clustering algorithm
 func GaussianCluster(flowers []Iris) {
 	rng := rand.New(rand.NewSource(1))
@@ -585,6 +604,7 @@ func Mark2() {
 	fmt.Println(results)
 
 	GaussianCluster(flowers)
+	ImprovedGaussianCluster(flowers)
 
 	p := plot.New()
 	if err != nil {
