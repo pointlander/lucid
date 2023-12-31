@@ -30,6 +30,8 @@ const (
 	Inputs = 4
 	// Outputs is the number of outputs
 	Outputs = 4
+	// Clusters is the number of clusters
+	Clusters = 3
 )
 
 var colors = [...]color.RGBA{
@@ -42,6 +44,7 @@ var colors = [...]color.RGBA{
 type Random struct {
 	Mean   float32
 	StdDev float32
+	Count  float32
 }
 
 // Set is a set of statistics
@@ -236,7 +239,151 @@ type Iris struct {
 
 // GaussianCluster is a gaussian clustering algorithm
 func GaussianCluster(flowers []Iris) {
+	rng := rand.New(rand.NewSource(1))
+	a := make([]Random, Outputs*Clusters*len(flowers))
+	for i := range a {
+		a[i].StdDev = 1
+	}
+	type Sample struct {
+		S []float32
+		V float32
+	}
+	samples := make([]Sample, 256)
+	for i := range samples {
+		samples[i].S = make([]float32, Outputs*Clusters*len(flowers))
+	}
+	for i := 0; i < 256; i++ {
+		for j := range samples {
+			for k := range samples[j].S {
+				d := a[k]
+				samples[j].S[k] = d.StdDev*float32(rng.NormFloat64()) + d.Mean
+				samples[j].V = 0
+			}
+			var clusters [Outputs * Clusters]Random
+			var out [Outputs]Random
+			for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
+				for o := 0; o < Outputs*Clusters; o += Clusters {
+					outsider := true
+					for l := 0; l < Clusters; l++ {
+						if samples[j].S[k+o+l] > 0 {
+							clusters[o+l].Mean += flowers[k/(Outputs*Clusters)].Embedding[o/Clusters]
+							clusters[o+l].Count++
+							outsider = false
+						}
+					}
+					if outsider {
+						out[o/Clusters].Mean += flowers[k/(Outputs*3)].Embedding[o/3]
+						out[o/Clusters].Count++
+					}
+				}
+			}
 
+			for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
+				for o := 0; o < Outputs*Clusters; o += Clusters {
+					outsider := true
+					for l := 0; l < Clusters; l++ {
+						if samples[j].S[k+o+l] > 0 {
+							clusters[o+l].Mean /= clusters[o+l].Count
+							outsider = false
+						}
+					}
+					if outsider {
+						out[o/Clusters].Mean /= out[o/Clusters].Count
+					}
+				}
+			}
+
+			for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
+				for o := 0; o < Outputs*Clusters; o += Clusters {
+					outsider := true
+					for l := 0; l < Clusters; l++ {
+						if samples[j].S[k+o+l] > 0 {
+							diff := flowers[k/(Outputs*Clusters)].Embedding[o/Clusters] - clusters[o+l].Mean
+							clusters[o+l].StdDev += diff * diff
+							outsider = false
+						}
+					}
+					if outsider {
+						diff := flowers[k/(Outputs*Clusters)].Embedding[o/Clusters] - out[o/Clusters].Mean
+						out[o/Clusters].StdDev += diff * diff
+					}
+				}
+			}
+
+			for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
+				for o := 0; o < Outputs*Clusters; o += Clusters {
+					outsider := true
+					for l := 0; l < Clusters; l++ {
+						if samples[j].S[k+o+l] > 0 {
+							clusters[o+l].StdDev /= clusters[o+l].Count
+							clusters[o+l].StdDev = float32(math.Sqrt(float64(clusters[o+l].StdDev)))
+							outsider = false
+						}
+					}
+					if outsider {
+						out[o/Clusters].StdDev /= out[o/Clusters].Count
+						out[o/Clusters].StdDev = float32(math.Sqrt(float64(out[o/Clusters].StdDev)))
+					}
+				}
+			}
+
+			v := float32(0.0)
+			for k := range clusters {
+				v += clusters[k].StdDev
+			}
+			for k := range out {
+				v += out[k].StdDev
+			}
+			samples[j].V = v
+		}
+
+		sort.Slice(samples, func(i, j int) bool {
+			return samples[i].V < samples[j].V
+		})
+		fmt.Println(samples[0].V)
+
+		aa := make([]Random, Outputs*Clusters*len(flowers))
+		weights, sum := make([]float32, Window), float32(0)
+		for i := range weights {
+			sum += 1 / samples[i].V
+			weights[i] = 1 / samples[i].V
+		}
+		for i := range weights {
+			weights[i] /= sum
+		}
+
+		for i := range samples[:Window] {
+			for j, value := range samples[i].S {
+				aa[j].Mean += weights[i] * value
+			}
+		}
+		for i := range samples[:Window] {
+			for j, value := range samples[i].S {
+				diff := aa[j].Mean - value
+				aa[j].StdDev += weights[i] * diff * diff
+			}
+		}
+		for i := range aa {
+			aa[i].StdDev /= (float32(Window) - 1) / float32(Window)
+			aa[i].StdDev = float32(math.Sqrt(float64(aa[i].StdDev)))
+		}
+
+		a = aa
+	}
+
+	for k := 0; k < Outputs*Clusters*len(flowers); k += Outputs * Clusters {
+		for j, value := range a[k : k+Outputs*Clusters] {
+			if value.Mean > 0 {
+				fmt.Printf("1 ")
+			} else {
+				fmt.Printf("0 ")
+			}
+			if j%Clusters == 2 {
+				fmt.Printf("  ")
+			}
+		}
+		fmt.Println()
+	}
 }
 
 // Mark2 is the mark2 model
