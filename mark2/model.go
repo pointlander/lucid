@@ -255,7 +255,16 @@ func ImprovedGaussianCluster(flowers []Iris) {
 			}
 			clusters[i].E[j] = row
 		}
+		for j := range clusters[i].U {
+			clusters[i].U[j].StdDev = 1
+		}
 	}
+	type Sample struct {
+		E Matrix
+		U Matrix
+	}
+	samples := make([]Sample, Samples, Samples)
+	_ = samples
 }
 
 // GaussianCluster is a gaussian clustering algorithm
