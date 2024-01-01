@@ -24,6 +24,8 @@ import (
 const (
 	// Window is the window size
 	Window = 32
+	// GaussianWindow is the gaussian window
+	GaussianWindow = 8
 	// Rate is the learning rate
 	Rate = .3
 	// Samples is the number of samples
@@ -255,13 +257,15 @@ func ImprovedGaussianCluster(flowers []Iris) {
 		for j := range clusters[i].E {
 			row := make([]Random, Embedding)
 			for k := range row {
-				row[k].StdDev = factor
+				row[k].Mean = factor * float32(rng.NormFloat64())
+				row[k].StdDev = factor * float32(rng.NormFloat64())
 			}
 			clusters[i].E[j] = row
 		}
 		clusters[i].U = make([]Random, Embedding, Embedding)
 		for j := range clusters[i].U {
-			clusters[i].U[j].StdDev = factor
+			clusters[i].U[j].Mean = factor * float32(rng.NormFloat64())
+			clusters[i].U[j].StdDev = factor * float32(rng.NormFloat64())
 		}
 	}
 	type Sample struct {
@@ -307,7 +311,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 					x = Normalize(x)
 					y := MulT(T(MulT(Sub(x, samples[j].U[k]), samples[j].E[k])), Sub(x, samples[j].U[k]))
 					pdf := math.Pow(2*math.Pi, -Embedding/2) *
-						math.Pow(1/float64(det), -1/2) *
+						math.Pow(float64(det), 1/2) *
 						math.Exp(float64(-y.Data[0]/2))
 					cs[f] = pdf
 				}
@@ -347,13 +351,10 @@ func ImprovedGaussianCluster(flowers []Iris) {
 				aa[i].E[j] = make([]Random, Embedding)
 			}
 			aa[i].U = make([]Random, Embedding, Embedding)
-			for j := range aa[i].U {
-				aa[i].U[j].StdDev = 1
-			}
 		}
 
 		for k := range clusters {
-			weights, sum := make([]float64, Window), 0.0
+			weights, sum := make([]float64, GaussianWindow), 0.0
 			for i := range weights {
 				sum += 1 / samples[i].C[k]
 				weights[i] = 1 / samples[i].C[k]
@@ -362,7 +363,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 				weights[i] /= sum
 			}
 
-			for i := range samples[:Window] {
+			for i := range samples[:GaussianWindow] {
 				index := 0
 				for x := range aa[k].E {
 					for y := range aa[k].E[x] {
@@ -372,7 +373,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 					}
 				}
 			}
-			for i := range samples[:Window] {
+			for i := range samples[:GaussianWindow] {
 				index := 0
 				for x := range aa[k].E {
 					for y := range aa[k].E[x] {
@@ -384,9 +385,30 @@ func ImprovedGaussianCluster(flowers []Iris) {
 			}
 			for x := range aa[k].E {
 				for y := range aa[k].E[x] {
-					aa[k].E[x][y].StdDev /= (float32(Window) - 1) / float32(Window)
+					aa[k].E[x][y].StdDev /= (float32(GaussianWindow) - 1) / float32(GaussianWindow)
 					aa[k].E[x][y].StdDev = float32(math.Sqrt(float64(aa[k].E[x][y].StdDev)))
 				}
+			}
+
+			for i := range samples[:GaussianWindow] {
+				index := 0
+				for x := range aa[k].U {
+					value := samples[i].U[k].Data[index]
+					aa[k].U[x].Mean += float32(weights[i]) * value
+					index++
+				}
+			}
+			for i := range samples[:GaussianWindow] {
+				index := 0
+				for x := range aa[k].U {
+					diff := aa[k].U[x].Mean - samples[i].U[k].Data[index]
+					aa[k].U[x].StdDev += float32(weights[i]) * diff * diff
+					index++
+				}
+			}
+			for x := range aa[k].U {
+				aa[k].U[x].StdDev /= (float32(GaussianWindow) - 1) / float32(GaussianWindow)
+				aa[k].U[x].StdDev = float32(math.Sqrt(float64(aa[k].U[x].StdDev)))
 			}
 		}
 
