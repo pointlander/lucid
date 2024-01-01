@@ -13,6 +13,8 @@ import (
 
 	"github.com/pointlander/datum/iris"
 	. "github.com/pointlander/lucid/matrix"
+
+	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
@@ -241,30 +243,155 @@ type Iris struct {
 
 // ImprovedGaussianCluster is a gaussian clustering algorithm
 func ImprovedGaussianCluster(flowers []Iris) {
+	rng := rand.New(rand.NewSource(1))
 	type Cluster struct {
 		E Set
 		U []Random
 	}
+	factor := float32(math.Sqrt(2.0 / float64(Embedding)))
 	clusters := [Clusters]Cluster{}
 	for i := range clusters {
 		clusters[i].E = make(Set, Embedding)
 		for j := range clusters[i].E {
 			row := make([]Random, Embedding)
 			for k := range row {
-				row[k].StdDev = 1
+				row[k].StdDev = factor
 			}
 			clusters[i].E[j] = row
 		}
+		clusters[i].U = make([]Random, Embedding, Embedding)
 		for j := range clusters[i].U {
-			clusters[i].U[j].StdDev = 1
+			clusters[i].U[j].StdDev = factor
 		}
 	}
 	type Sample struct {
-		E Matrix
-		U Matrix
+		E [Clusters]Matrix
+		U [Clusters]Matrix
+		C [Clusters]float64
 	}
 	samples := make([]Sample, Samples, Samples)
-	_ = samples
+	for i := 0; i < 256; i++ {
+		for j := range samples {
+			for k := range clusters {
+				samples[j].E[k] = NewMatrix(0, Embedding, Embedding)
+				samples[j].U[k] = NewMatrix(0, Embedding, 1)
+				samples[j].C[k] = 0
+				for l := range clusters[k].E {
+					for m := range clusters[k].E[l] {
+						r := clusters[k].E[l][m]
+						samples[j].E[k].Data = append(samples[j].E[k].Data,
+							r.StdDev*float32(rng.NormFloat64())+r.Mean)
+					}
+				}
+				for l := range clusters[k].U {
+					r := clusters[k].U[l]
+					samples[j].U[k].Data = append(samples[j].U[k].Data,
+						r.StdDev*float32(rng.NormFloat64())+r.Mean)
+				}
+
+				/*det, err := Determinant(samples[j].E[k])
+				if err != nil {
+					panic(err)
+				}*/
+				in := make([]float64, len(samples[j].E[k].Data))
+				for f := range in {
+					in[f] = float64(samples[j].E[k].Data[f])
+				}
+				input := mat.NewDense(samples[j].E[k].Rows, samples[j].E[k].Cols, in)
+				d := mat.Det(input)
+				det := float32(d)
+				cs := make([]float64, len(flowers), len(flowers))
+				for f := range flowers {
+					x := NewMatrix(0, Embedding, 1)
+					x.Data = append(x.Data, flowers[f].Embedding...)
+					x = Normalize(x)
+					y := MulT(T(MulT(Sub(x, samples[j].U[k]), samples[j].E[k])), Sub(x, samples[j].U[k]))
+					pdf := math.Pow(2*math.Pi, -Embedding/2) *
+						math.Pow(1/float64(det), -1/2) *
+						math.Exp(float64(-y.Data[0]/2))
+					cs[f] = pdf
+				}
+				mean := 0.0
+				for _, value := range cs {
+					mean += value
+				}
+				mean /= float64(len(flowers))
+				stddev := 0.0
+				for _, value := range cs {
+					diff := value - mean
+					stddev += diff * diff
+				}
+				stddev /= float64(len(flowers))
+				stddev = math.Sqrt(stddev)
+				samples[j].C[k] += stddev
+			}
+		}
+
+		sort.Slice(samples, func(i, j int) bool {
+			a := 0.0
+			for x := range samples[i].C {
+				a += samples[i].C[x]
+			}
+			b := 0.0
+			for x := range samples[j].C {
+				b += samples[j].C[x]
+			}
+			return a < b
+		})
+		fmt.Println(samples[0].C)
+
+		aa := [Clusters]Cluster{}
+		for i := range aa {
+			aa[i].E = make(Set, Embedding)
+			for j := range aa[i].E {
+				aa[i].E[j] = make([]Random, Embedding)
+			}
+			aa[i].U = make([]Random, Embedding, Embedding)
+			for j := range aa[i].U {
+				aa[i].U[j].StdDev = 1
+			}
+		}
+
+		for k := range clusters {
+			weights, sum := make([]float64, Window), 0.0
+			for i := range weights {
+				sum += 1 / samples[i].C[k]
+				weights[i] = 1 / samples[i].C[k]
+			}
+			for i := range weights {
+				weights[i] /= sum
+			}
+
+			for i := range samples[:Window] {
+				index := 0
+				for x := range aa[k].E {
+					for y := range aa[k].E[x] {
+						value := samples[i].E[k].Data[index]
+						aa[k].E[x][y].Mean += float32(weights[i]) * value
+						index++
+					}
+				}
+			}
+			for i := range samples[:Window] {
+				index := 0
+				for x := range aa[k].E {
+					for y := range aa[k].E[x] {
+						diff := aa[k].E[x][y].Mean - samples[i].E[k].Data[index]
+						aa[k].E[x][y].StdDev += float32(weights[i]) * diff * diff
+						index++
+					}
+				}
+			}
+			for x := range aa[k].E {
+				for y := range aa[k].E[x] {
+					aa[k].E[x][y].StdDev /= (float32(Window) - 1) / float32(Window)
+					aa[k].E[x][y].StdDev = float32(math.Sqrt(float64(aa[k].E[x][y].StdDev)))
+				}
+			}
+		}
+
+		clusters = aa
+	}
 }
 
 // GaussianCluster is a gaussian clustering algorithm
