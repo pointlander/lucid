@@ -250,22 +250,22 @@ func ImprovedGaussianCluster(flowers []Iris) {
 		E Set
 		U []Random
 	}
-	factor := float32(math.Sqrt(2.0 / float64(Embedding)))
+	//factor := float32(math.Sqrt(2.0 / float64(Embedding)))
 	clusters := [Clusters]Cluster{}
 	for i := range clusters {
 		clusters[i].E = make(Set, Embedding)
 		for j := range clusters[i].E {
 			row := make([]Random, Embedding)
 			for k := range row {
-				row[k].Mean = factor * float32(rng.NormFloat64())
-				row[k].StdDev = factor * float32(rng.NormFloat64())
+				row[k].Mean = 0   //factor * float32(rng.NormFloat64())
+				row[k].StdDev = 1 //factor * float32(rng.NormFloat64())
 			}
 			clusters[i].E[j] = row
 		}
 		clusters[i].U = make([]Random, Embedding, Embedding)
 		for j := range clusters[i].U {
-			clusters[i].U[j].Mean = factor * float32(rng.NormFloat64())
-			clusters[i].U[j].StdDev = factor * float32(rng.NormFloat64())
+			clusters[i].U[j].Mean = 0   //factor * float32(rng.NormFloat64())
+			clusters[i].U[j].StdDev = 1 //factor * float32(rng.NormFloat64())
 		}
 	}
 	type Sample struct {
@@ -326,7 +326,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 				}
 				stddev /= float64(len(flowers))
 				stddev = math.Sqrt(stddev)
-				samples[j].C[k] += stddev
+				samples[j].C[k] = 1 / math.Log(stddev)
 			}
 		}
 
@@ -347,8 +347,8 @@ func ImprovedGaussianCluster(flowers []Iris) {
 
 			weights, sum := make([]float64, GaussianWindow), 0.0
 			for i := range weights {
-				sum += 1 / samples[i].C[k]
-				weights[i] = 1 / samples[i].C[k]
+				sum += samples[i].C[k]
+				weights[i] = samples[i].C[k]
 			}
 			for i := range weights {
 				weights[i] /= sum
