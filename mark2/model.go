@@ -274,7 +274,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 		C [Clusters]float64
 	}
 	samples := make([]Sample, Samples, Samples)
-	for i := 0; i < 256; i++ {
+	for i := 0; i < 128; i++ {
 		for j := range samples {
 			for k := range clusters {
 				samples[j].E[k] = NewMatrix(0, Embedding, Embedding)
@@ -308,7 +308,6 @@ func ImprovedGaussianCluster(flowers []Iris) {
 				for f := range flowers {
 					x := NewMatrix(0, Embedding, 1)
 					x.Data = append(x.Data, flowers[f].Embedding...)
-					x = Normalize(x)
 					y := MulT(T(MulT(Sub(x, samples[j].U[k]), samples[j].E[k])), Sub(x, samples[j].U[k]))
 					pdf := math.Pow(2*math.Pi, -Embedding/2) *
 						math.Pow(float64(det), 1/2) *
@@ -331,19 +330,6 @@ func ImprovedGaussianCluster(flowers []Iris) {
 			}
 		}
 
-		sort.Slice(samples, func(i, j int) bool {
-			a := 0.0
-			for x := range samples[i].C {
-				a += samples[i].C[x]
-			}
-			b := 0.0
-			for x := range samples[j].C {
-				b += samples[j].C[x]
-			}
-			return a < b
-		})
-		fmt.Println(samples[0].C)
-
 		aa := [Clusters]Cluster{}
 		for i := range aa {
 			aa[i].E = make(Set, Embedding)
@@ -354,6 +340,11 @@ func ImprovedGaussianCluster(flowers []Iris) {
 		}
 
 		for k := range clusters {
+			sort.Slice(samples, func(i, j int) bool {
+				return samples[i].C[k] < samples[j].C[k]
+			})
+			fmt.Println(samples[0].C)
+
 			weights, sum := make([]float64, GaussianWindow), 0.0
 			for i := range weights {
 				sum += 1 / samples[i].C[k]
@@ -413,6 +404,36 @@ func ImprovedGaussianCluster(flowers []Iris) {
 		}
 
 		clusters = aa
+	}
+
+	for i := range flowers {
+		x := NewMatrix(0, Embedding, 1)
+		x.Data = append(x.Data, flowers[i].Embedding...)
+
+		index, max := 0, 0.0
+		for j := 0; j < Clusters; j++ {
+			c := j
+			sort.Slice(samples, func(i, j int) bool {
+				return samples[i].C[c] < samples[j].C[c]
+			})
+			sample := samples[0]
+
+			in := make([]float64, len(sample.E[j].Data))
+			for k := range in {
+				in[k] = float64(sample.E[j].Data[k])
+			}
+			input := mat.NewDense(sample.E[j].Rows, sample.E[j].Cols, in)
+			d := mat.Det(input)
+			det := float32(d)
+			y := MulT(T(MulT(Sub(x, sample.U[j]), sample.E[j])), Sub(x, sample.U[j]))
+			pdf := math.Pow(2*math.Pi, -Embedding/2) *
+				math.Pow(float64(det), 1/2) *
+				math.Exp(float64(-y.Data[0]/2))
+			if pdf > max {
+				index, max = j, pdf
+			}
+		}
+		fmt.Println(index, flowers[i].Label, max)
 	}
 }
 
@@ -761,7 +782,7 @@ func Mark2() {
 	fmt.Println(clusters)
 	fmt.Println(results)
 
-	GaussianCluster(flowers)
+	//GaussianCluster(flowers)
 	ImprovedGaussianCluster(flowers)
 
 	p := plot.New()
