@@ -276,11 +276,11 @@ func ImprovedGaussianCluster(flowers []Iris) {
 	type Sample struct {
 		E  [Clusters]Matrix
 		U  [Clusters]Matrix
-		C  [Clusters]float64
+		C  float64
 		Pi []float32
 	}
 	samples := make([]Sample, Samples, Samples)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 128; i++ {
 		for j := range samples {
 			samples[j].Pi = make([]float32, Clusters*len(flowers), Clusters*len(flowers))
 			for l := 0; l < len(samples[j].Pi); l += Clusters {
@@ -297,10 +297,14 @@ func ImprovedGaussianCluster(flowers []Iris) {
 					samples[j].Pi[l+k] /= sum
 				}
 			}
+			var cs [Clusters][]float64
+			for k := range cs {
+				cs[k] = make([]float64, len(flowers), len(flowers))
+			}
+			samples[j].C = 0
 			for k := range clusters {
 				samples[j].E[k] = NewMatrix(0, Embedding, Embedding)
 				samples[j].U[k] = NewMatrix(0, Embedding, 1)
-				samples[j].C[k] = 0
 				for l := range clusters[k].E {
 					for m := range clusters[k].E[l] {
 						r := clusters[k].E[l][m]
@@ -325,7 +329,6 @@ func ImprovedGaussianCluster(flowers []Iris) {
 				input := mat.NewDense(samples[j].E[k].Rows, samples[j].E[k].Cols, in)
 				d := mat.Det(input)
 				det := float32(d)
-				cs := make([]float64, len(flowers), len(flowers))
 				for f := range flowers {
 					x := NewMatrix(0, Embedding, 1)
 					x.Data = append(x.Data, flowers[f].Embedding...)
@@ -333,21 +336,32 @@ func ImprovedGaussianCluster(flowers []Iris) {
 					pdf := math.Pow(2*math.Pi, -Embedding/2) *
 						math.Pow(float64(det), 1/2) *
 						math.Exp(float64(-y.Data[0]/2))
-					cs[f] = float64(samples[j].Pi[f*Clusters+k]) * pdf
+					cs[k][f] = float64(samples[j].Pi[f*Clusters+k]) * pdf
 				}
+			}
+			for f := range flowers {
+				sum := 0.0
+				for k := range clusters {
+					sum += cs[k][f]
+				}
+				for k := range clusters {
+					cs[k][f] /= sum
+				}
+			}
+			for k := range clusters {
 				mean := 0.0
-				for _, value := range cs {
+				for _, value := range cs[k] {
 					mean += value
 				}
 				mean /= float64(len(flowers))
 				stddev := 0.0
-				for _, value := range cs {
+				for _, value := range cs[k] {
 					diff := value - mean
 					stddev += diff * diff
 				}
 				stddev /= float64(len(flowers))
 				stddev = math.Sqrt(stddev)
-				samples[j].C[k] = 1 / stddev
+				samples[j].C += 1 / stddev
 			}
 		}
 
@@ -360,21 +374,21 @@ func ImprovedGaussianCluster(flowers []Iris) {
 			aa[i].U = make([]Random, Embedding, Embedding)
 		}
 
+		sort.Slice(samples, func(i, j int) bool {
+			return samples[i].C < samples[j].C
+		})
+		fmt.Println(samples[0].C)
+
+		weights, sum := make([]float64, GaussianWindow), 0.0
+		for i := range weights {
+			sum += samples[i].C
+			weights[i] = samples[i].C
+		}
+		for i := range weights {
+			weights[i] /= sum
+		}
+
 		for k := range clusters {
-			sort.Slice(samples, func(i, j int) bool {
-				return samples[i].C[k] < samples[j].C[k]
-			})
-			fmt.Println(samples[0].C)
-
-			weights, sum := make([]float64, GaussianWindow), 0.0
-			for i := range weights {
-				sum += samples[i].C[k]
-				weights[i] = samples[i].C[k]
-			}
-			for i := range weights {
-				weights[i] /= sum
-			}
-
 			for i := range samples[:GaussianWindow] {
 				index := 0
 				for x := range aa[k].E {
@@ -450,9 +464,8 @@ func ImprovedGaussianCluster(flowers []Iris) {
 
 		index, max := 0, 0.0
 		for j := 0; j < Clusters; j++ {
-			c := j
 			sort.Slice(samples, func(i, j int) bool {
-				return samples[i].C[c] < samples[j].C[c]
+				return samples[i].C < samples[j].C
 			})
 			sample := samples[0]
 
