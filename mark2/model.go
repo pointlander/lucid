@@ -245,7 +245,7 @@ type Iris struct {
 
 // ImprovedGaussianCluster is a gaussian clustering algorithm
 func ImprovedGaussianCluster(flowers []Iris) {
-	rng := rand.New(rand.NewSource(1))
+	rng := rand.New(rand.NewSource(3))
 	type Cluster struct {
 		E Set
 		U []Random
@@ -280,7 +280,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 		Pi []float32
 	}
 	samples := make([]Sample, Samples, Samples)
-	for i := 0; i < 128; i++ {
+	for i := 0; i < 4; i++ {
 		for j := range samples {
 			samples[j].Pi = make([]float32, Clusters*len(flowers), Clusters*len(flowers))
 			for l := 0; l < len(samples[j].Pi); l += Clusters {
