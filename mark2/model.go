@@ -12,7 +12,7 @@ import (
 	"sort"
 
 	"github.com/pointlander/datum/iris"
-	. "github.com/pointlander/lucid/matrix"
+	. "github.com/pointlander/matrix"
 
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/plot"
@@ -22,14 +22,14 @@ import (
 )
 
 const (
-	// Window is the window size
-	Window = 32
+	// ModelWindow is the window size
+	ModelWindow = 32
 	// GaussianWindow is the gaussian window
 	GaussianWindow = 8
 	// Rate is the learning rate
 	Rate = .3
-	// Samples is the number of samples
-	Samples = 256
+	// ModelSamples is the number of samples
+	ModelSamples = 256
 	// Inputs is the number of inputs
 	Inputs = 4
 	// Outputs is the number of outputs
@@ -47,7 +47,7 @@ var colors = [...]color.RGBA{
 }
 
 // Random is a random variable
-type Random struct {
+type Rand struct {
 	Mean   float32
 	StdDev float32
 	Count  float32
@@ -130,7 +130,7 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 			})
 		}
 	}
-	weights, sum := make([]float32, Window), float32(0)
+	weights, sum := make([]float32, ModelWindow), float32(0)
 	for i := range weights {
 		sum += 1 / systems[i].Entropy
 		weights[i] = 1 / systems[i].Entropy
@@ -139,14 +139,14 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 		weights[i] /= sum
 	}
 
-	for i := range systems[:Window] {
+	for i := range systems[:ModelWindow] {
 		for j := range systems[i].Neurons {
 			for k, value := range systems[i].Neurons[j].Data {
 				statistics[j][k].Mean += weights[i] * value
 			}
 		}
 	}
-	for i := range systems[:Window] {
+	for i := range systems[:ModelWindow] {
 		for j := range systems[i].Neurons {
 			for k, value := range systems[i].Neurons[j].Data {
 				diff := statistics[j][k].Mean - value
@@ -156,7 +156,7 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 	}
 	for i := range statistics {
 		for j := range statistics[i] {
-			statistics[i][j].StdDev /= (Window - 1.0) / Window
+			statistics[i][j].StdDev /= (ModelWindow - 1.0) / ModelWindow
 			statistics[i][j].StdDev = float32(math.Sqrt(float64(statistics[i][j].StdDev)))
 		}
 	}
@@ -165,13 +165,13 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 
 // Fire runs the network
 func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
-	q := NewMatrix(0, n.Outputs, Samples)
-	k := NewMatrix(0, n.Outputs, Samples)
-	v := NewMatrix(0, n.Outputs, Samples)
+	q := NewMatrix(0, n.Outputs, ModelSamples)
+	k := NewMatrix(0, n.Outputs, ModelSamples)
+	v := NewMatrix(0, n.Outputs, ModelSamples)
 	systemsQ := make([]Sample, 0, 8)
 	systemsK := make([]Sample, 0, 8)
 	systemsV := make([]Sample, 0, 8)
-	for i := 0; i < Samples; i++ {
+	for i := 0; i < ModelSamples; i++ {
 		neurons := n.Q.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
@@ -184,7 +184,7 @@ func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 			Outputs: outputs,
 		})
 	}
-	for i := 0; i < Samples; i++ {
+	for i := 0; i < ModelSamples; i++ {
 		neurons := n.K.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
@@ -197,7 +197,7 @@ func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 			Outputs: outputs,
 		})
 	}
-	for i := 0; i < Samples; i++ {
+	for i := 0; i < ModelSamples; i++ {
 		neurons := n.V.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
@@ -279,7 +279,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 		C  float64
 		Pi []float32
 	}
-	samples := make([]Sample, Samples, Samples)
+	samples := make([]Sample, ModelSamples, ModelSamples)
 	for i := 0; i < 128; i++ {
 		for j := range samples {
 			samples[j].Pi = make([]float32, Clusters*len(flowers), Clusters*len(flowers))
@@ -492,7 +492,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 // GaussianCluster is a gaussian clustering algorithm
 func GaussianCluster(flowers []Iris) {
 	rng := rand.New(rand.NewSource(1))
-	a := make([]Random, Embedding*Clusters*len(flowers))
+	a := make([]Rand, Embedding*Clusters*len(flowers))
 	for i := range a {
 		a[i].StdDev = 1
 	}
@@ -511,8 +511,8 @@ func GaussianCluster(flowers []Iris) {
 				samples[j].S[k] = d.StdDev*float32(rng.NormFloat64()) + d.Mean
 				samples[j].V = 0
 			}
-			var clusters [Embedding * Clusters]Random
-			var out [Embedding]Random
+			var clusters [Embedding * Clusters]Rand
+			var out [Embedding]Rand
 			for k := 0; k < Embedding*Clusters*len(flowers); k += Embedding * Clusters {
 				for o := 0; o < Embedding*Clusters; o += Clusters {
 					outsider := true
@@ -594,8 +594,8 @@ func GaussianCluster(flowers []Iris) {
 		})
 		fmt.Println(samples[0].V)
 
-		aa := make([]Random, Embedding*Clusters*len(flowers))
-		weights, sum := make([]float32, Window), float32(0)
+		aa := make([]Rand, Embedding*Clusters*len(flowers))
+		weights, sum := make([]float32, ModelWindow), float32(0)
 		for i := range weights {
 			sum += 1 / samples[i].V
 			weights[i] = 1 / samples[i].V
@@ -604,19 +604,19 @@ func GaussianCluster(flowers []Iris) {
 			weights[i] /= sum
 		}
 
-		for i := range samples[:Window] {
+		for i := range samples[:ModelWindow] {
 			for j, value := range samples[i].S {
 				aa[j].Mean += weights[i] * value
 			}
 		}
-		for i := range samples[:Window] {
+		for i := range samples[:ModelWindow] {
 			for j, value := range samples[i].S {
 				diff := aa[j].Mean - value
 				aa[j].StdDev += weights[i] * diff * diff
 			}
 		}
 		for i := range aa {
-			aa[i].StdDev /= (float32(Window) - 1) / float32(Window)
+			aa[i].StdDev /= (float32(ModelWindow) - 1) / float32(ModelWindow)
 			aa[i].StdDev = float32(math.Sqrt(float64(aa[i].StdDev)))
 		}
 
