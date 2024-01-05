@@ -244,6 +244,8 @@ type Iris struct {
 }
 
 // ImprovedGaussianCluster is a gaussian clustering algorithm
+// https://github.com/Ransaka/GMM-from-scratch
+// https://en.wikipedia.org/wiki/Multivariate_normal_distribution
 func ImprovedGaussianCluster(flowers []Iris) {
 	rng := rand.New(rand.NewSource(3))
 	type Cluster struct {
