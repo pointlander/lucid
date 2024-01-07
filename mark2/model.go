@@ -320,16 +320,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 						r.StdDev*float32(rng.NormFloat64())+r.Mean)
 				}
 
-				/*det, err := Determinant(samples[j].E[k])
-				if err != nil {
-					panic(err)
-				}*/
-				in := make([]float64, len(samples[j].E[k].Data))
-				for f := range in {
-					in[f] = float64(samples[j].E[k].Data[f])
-				}
-				input := mat.NewDense(samples[j].E[k].Rows, samples[j].E[k].Cols, in)
-				d := mat.Det(input)
+				d, _ := Determinant(samples[j].E[k])
 				det := float32(d)
 				for f := range flowers {
 					x := NewMatrix(0, Embedding, 1)
