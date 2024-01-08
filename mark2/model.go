@@ -241,6 +241,7 @@ type Iris struct {
 	iris.Iris
 	I         int
 	Embedding []float32
+	Cluster   int
 }
 
 // ImprovedGaussianCluster is a gaussian clustering algorithm
@@ -478,6 +479,7 @@ func ImprovedGaussianCluster(flowers []Iris) {
 				index, max = j, pdf
 			}
 		}
+		flowers[i].Cluster = index
 		fmt.Println(index, flowers[i].Label, max)
 	}
 }
@@ -693,11 +695,6 @@ func Mark2() {
 			fmt.Println(label, entropy, v.Data)
 		}
 	}
-	nn := map[string][6][]float32{
-		"Iris-setosa":     [6][]float32{},
-		"Iris-versicolor": [6][]float32{},
-		"Iris-virginica":  [6][]float32{},
-	}
 	perm := rng.Perm(len(flowers))
 	for epoch := 0; epoch < length; epoch++ {
 		index := perm[epoch]
@@ -720,12 +717,6 @@ func Mark2() {
 		//e, output := layer.Fire(input)
 		entropy, q, k, v := net.Fire(query, key, value)
 		projection.Fire(q, k, v)
-		if value := nn[label]; value[0] == nil {
-			value[0] = q.Data
-			value[1] = k.Data
-			value[2] = v.Data
-			nn[label] = value
-		}
 		fmt.Println(label, entropy, v.Data)
 		copy(query.Data, q.Data)
 		query.Data[4] = 1
@@ -736,35 +727,6 @@ func Mark2() {
 		entropy, q, k, v = net.Fire(query, key, value)
 		projection.Fire(q, k, v)
 		fmt.Println(label, entropy, v.Data)
-		if value := nn[label]; value[3] == nil {
-			value[3] = q.Data
-			value[4] = k.Data
-			value[5] = v.Data
-			nn[label] = value
-		}
-	}
-	clusters := map[string][150]int{
-		"Iris-setosa":     [150]int{},
-		"Iris-versicolor": [150]int{},
-		"Iris-virginica":  [150]int{},
-	}
-	//vectors := []Matrix{}
-	search := func(query Matrix, epoch, a int) {
-		min, index := math.MaxFloat32, ""
-		for name, set := range nn {
-			distance := 0.0
-			for j, value := range set[a] {
-				diff := float64(query.Data[j] - value)
-				distance += diff * diff
-			}
-			distance = math.Sqrt(distance)
-			if distance < min {
-				min, index = distance, name
-			}
-		}
-		list := clusters[index]
-		list[epoch]++
-		clusters[index] = list
 	}
 	perm = rng.Perm(len(flowers))
 	points := make(plotter.XYs, len(flowers))
@@ -789,9 +751,6 @@ func Mark2() {
 		//e, output := layer.Fire(input)
 		entropy, q, k, v := net.Fire(query, key, value)
 		projection.Fire(q, k, v)
-		search(q, index, 0)
-		search(k, index, 1)
-		search(v, index, 2)
 		copy(query.Data, q.Data)
 		query.Data[4] = 1
 		copy(key.Data, k.Data)
@@ -806,29 +765,7 @@ func Mark2() {
 		points[index] = plotter.XY{X: float64(point.Data[0]), Y: float64(point.Data[1])}
 		//vectors = append(vectors, output)
 		fmt.Println(label, entropy, v.Data)
-		search(q, index, 3)
-		search(k, index, 4)
-		search(v, index, 5)
 	}
-	results := map[string][]int{
-		"Iris-setosa":     []int{},
-		"Iris-versicolor": []int{},
-		"Iris-virginica":  []int{},
-	}
-	for i := 0; i < 150; i++ {
-		max, name := 0, ""
-		for k, v := range clusters {
-			if v[i] > max {
-				max, name = v[i], k
-			}
-		}
-		list := results[name]
-		list = append(list, i)
-		results[name] = list
-	}
-	fmt.Println(clusters)
-	fmt.Println(results)
-
 	//GaussianCluster(flowers)
 	ImprovedGaussianCluster(flowers)
 
@@ -843,11 +780,18 @@ func Mark2() {
 	p.Legend.Top = true
 
 	c := 0
-	for key, value := range results {
-		set := make(plotter.XYs, 0, 50)
-		for _, point := range value {
-			set = append(set, points[point])
+	sets := make([]plotter.XYs, Clusters, Clusters)
+	names := make([]string, Clusters)
+	for j := range sets {
+		sets[j] = make(plotter.XYs, 0, 50)
+	}
+	for key, value := range flowers {
+		if names[value.Cluster] == "" {
+			names[value.Cluster] = value.Label
 		}
+		sets[value.Cluster] = append(sets[value.Cluster], points[key])
+	}
+	for j, set := range sets {
 		scatter, err := plotter.NewScatter(set)
 		if err != nil {
 			panic(err)
@@ -856,7 +800,7 @@ func Mark2() {
 		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
 		scatter.GlyphStyle.Color = colors[c]
 		p.Add(scatter)
-		p.Legend.Add(key, scatter)
+		p.Legend.Add(names[j], scatter)
 		c++
 	}
 
