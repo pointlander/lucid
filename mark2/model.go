@@ -660,7 +660,9 @@ func Mark2() {
 	net := NewNet(1, Inputs+1, Outputs)
 	projection := NewNet(2, Outputs, 2)
 	length := len(data.Fisher)
-	for i := 0; i < 3; i++ {
+	const epochs = 5
+	points := make(plotter.XYs, len(flowers))
+	for i := 0; i < epochs; i++ {
 		perm := rng.Perm(len(flowers))
 		for epoch := 0; epoch < length; epoch++ {
 			index := perm[epoch]
@@ -690,81 +692,20 @@ func Mark2() {
 			key.Data[4] = 1
 			copy(value.Data, v.Data)
 			value.Data[4] = 1
-			entropy, q, k, v = net.Fire(query, key, value)
-			projection.Fire(q, k, v)
-			fmt.Println(label, entropy, v.Data)
+			if i == epochs-1 {
+				entropy, q, k, v = net.Fire(query, key, value)
+				flowers[index].Embedding = append(flowers[index].Embedding, q.Data...)
+				flowers[index].Embedding = append(flowers[index].Embedding, k.Data...)
+				flowers[index].Embedding = append(flowers[index].Embedding, v.Data...)
+				_, _, _, point := projection.Fire(q, k, v)
+				points[index] = plotter.XY{X: float64(point.Data[0]), Y: float64(point.Data[1])}
+				fmt.Println(label, entropy, v.Data)
+			} else {
+				entropy, q, k, v = net.Fire(query, key, value)
+				projection.Fire(q, k, v)
+				fmt.Println(label, entropy, v.Data)
+			}
 		}
-	}
-	perm := rng.Perm(len(flowers))
-	for epoch := 0; epoch < length; epoch++ {
-		index := perm[epoch]
-		query := NewMatrix(0, Inputs+1, 1)
-		for _, value := range flowers[index].Measures {
-			query.Data = append(query.Data, float32(value))
-		}
-		query.Data = append(query.Data, 0)
-		key := NewMatrix(0, Inputs+1, 1)
-		for _, value := range flowers[index].Measures {
-			key.Data = append(key.Data, float32(value))
-		}
-		key.Data = append(key.Data, 0)
-		value := NewMatrix(0, Inputs+1, 1)
-		for _, v := range flowers[index].Measures {
-			value.Data = append(value.Data, float32(v))
-		}
-		value.Data = append(value.Data, 0)
-		label := flowers[index].Label
-		//e, output := layer.Fire(input)
-		entropy, q, k, v := net.Fire(query, key, value)
-		projection.Fire(q, k, v)
-		fmt.Println(label, entropy, v.Data)
-		copy(query.Data, q.Data)
-		query.Data[4] = 1
-		copy(key.Data, k.Data)
-		key.Data[4] = 1
-		copy(value.Data, v.Data)
-		value.Data[4] = 1
-		entropy, q, k, v = net.Fire(query, key, value)
-		projection.Fire(q, k, v)
-		fmt.Println(label, entropy, v.Data)
-	}
-	perm = rng.Perm(len(flowers))
-	points := make(plotter.XYs, len(flowers))
-	for epoch := 0; epoch < length; epoch++ {
-		index := perm[epoch]
-		query := NewMatrix(0, Inputs+1, 1)
-		for _, value := range flowers[index].Measures {
-			query.Data = append(query.Data, float32(value))
-		}
-		query.Data = append(query.Data, 0)
-		key := NewMatrix(0, Inputs+1, 1)
-		for _, value := range flowers[index].Measures {
-			key.Data = append(key.Data, float32(value))
-		}
-		key.Data = append(key.Data, 0)
-		value := NewMatrix(0, Inputs+1, 1)
-		for _, v := range flowers[index].Measures {
-			value.Data = append(value.Data, float32(v))
-		}
-		value.Data = append(value.Data, 0)
-		label := flowers[index].Label
-		//e, output := layer.Fire(input)
-		entropy, q, k, v := net.Fire(query, key, value)
-		projection.Fire(q, k, v)
-		copy(query.Data, q.Data)
-		query.Data[4] = 1
-		copy(key.Data, k.Data)
-		key.Data[4] = 1
-		copy(value.Data, v.Data)
-		value.Data[4] = 1
-		entropy, q, k, v = net.Fire(query, key, value)
-		flowers[index].Embedding = append(flowers[index].Embedding, q.Data...)
-		flowers[index].Embedding = append(flowers[index].Embedding, k.Data...)
-		flowers[index].Embedding = append(flowers[index].Embedding, v.Data...)
-		_, _, _, point := projection.Fire(q, k, v)
-		points[index] = plotter.XY{X: float64(point.Data[0]), Y: float64(point.Data[1])}
-		//vectors = append(vectors, output)
-		fmt.Println(label, entropy, v.Data)
 	}
 	//GaussianCluster(flowers)
 	ImprovedGaussianCluster(flowers)
