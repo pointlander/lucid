@@ -655,8 +655,6 @@ func Mark2() {
 		flowers[i].Iris = value
 		flowers[i].I = i
 	}
-	//layer := NewNet(2, Inputs, 2*Inputs)
-	//net := NewNet(1, 2*Inputs, Outputs)
 	net := NewNet(1, Inputs+1, Outputs)
 	projection := NewNet(2, Outputs, 2)
 	length := len(data.Fisher)
@@ -682,9 +680,7 @@ func Mark2() {
 			}
 			value.Data = append(value.Data, 0)
 			label := flowers[index].Label
-			//_, output := layer.Fire(input)
 			entropy, q, k, v := net.Fire(query, key, value)
-			projection.Fire(q, k, v)
 			fmt.Println(label, entropy, v.Data)
 			copy(query.Data, q.Data)
 			query.Data[4] = 1
