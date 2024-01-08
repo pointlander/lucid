@@ -655,48 +655,50 @@ func Mark2() {
 	}
 	//layer := NewNet(2, Inputs, 2*Inputs)
 	//net := NewNet(1, 2*Inputs, Outputs)
-	perm := rng.Perm(len(flowers))
 	net := NewNet(1, Inputs+1, Outputs)
 	projection := NewNet(2, Outputs, 2)
 	length := len(data.Fisher)
-	for epoch := 0; epoch < length; epoch++ {
-		index := perm[epoch]
-		query := NewMatrix(0, Inputs+1, 1)
-		for _, value := range flowers[index].Measures {
-			query.Data = append(query.Data, float32(value))
+	for i := 0; i < 3; i++ {
+		perm := rng.Perm(len(flowers))
+		for epoch := 0; epoch < length; epoch++ {
+			index := perm[epoch]
+			query := NewMatrix(0, Inputs+1, 1)
+			for _, value := range flowers[index].Measures {
+				query.Data = append(query.Data, float32(value))
+			}
+			query.Data = append(query.Data, 0)
+			key := NewMatrix(0, Inputs+1, 1)
+			for _, value := range flowers[index].Measures {
+				key.Data = append(key.Data, float32(value))
+			}
+			key.Data = append(key.Data, 0)
+			value := NewMatrix(0, Inputs+1, 1)
+			for _, v := range flowers[index].Measures {
+				value.Data = append(value.Data, float32(v))
+			}
+			value.Data = append(value.Data, 0)
+			label := flowers[index].Label
+			//_, output := layer.Fire(input)
+			entropy, q, k, v := net.Fire(query, key, value)
+			projection.Fire(q, k, v)
+			fmt.Println(label, entropy, v.Data)
+			copy(query.Data, q.Data)
+			query.Data[4] = 1
+			copy(key.Data, k.Data)
+			key.Data[4] = 1
+			copy(value.Data, v.Data)
+			value.Data[4] = 1
+			entropy, q, k, v = net.Fire(query, key, value)
+			projection.Fire(q, k, v)
+			fmt.Println(label, entropy, v.Data)
 		}
-		query.Data = append(query.Data, 0)
-		key := NewMatrix(0, Inputs+1, 1)
-		for _, value := range flowers[index].Measures {
-			key.Data = append(key.Data, float32(value))
-		}
-		key.Data = append(key.Data, 0)
-		value := NewMatrix(0, Inputs+1, 1)
-		for _, v := range flowers[index].Measures {
-			value.Data = append(value.Data, float32(v))
-		}
-		value.Data = append(value.Data, 0)
-		label := flowers[index].Label
-		//_, output := layer.Fire(input)
-		entropy, q, k, v := net.Fire(query, key, value)
-		projection.Fire(q, k, v)
-		fmt.Println(label, entropy, v.Data)
-		copy(query.Data, q.Data)
-		query.Data[4] = 1
-		copy(key.Data, k.Data)
-		key.Data[4] = 1
-		copy(value.Data, v.Data)
-		value.Data[4] = 1
-		entropy, q, k, v = net.Fire(query, key, value)
-		projection.Fire(q, k, v)
-		fmt.Println(label, entropy, v.Data)
 	}
 	nn := map[string][6][]float32{
 		"Iris-setosa":     [6][]float32{},
 		"Iris-versicolor": [6][]float32{},
 		"Iris-virginica":  [6][]float32{},
 	}
-	perm = rng.Perm(len(flowers))
+	perm := rng.Perm(len(flowers))
 	for epoch := 0; epoch < length; epoch++ {
 		index := perm[epoch]
 		query := NewMatrix(0, Inputs+1, 1)
