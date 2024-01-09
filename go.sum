@@ -59,6 +59,8 @@ github.com/pointlander/matrix v0.0.0-20240104205903-8429c7adb658 h1:UuRcVLeWQ8pZ
 github.com/pointlander/matrix v0.0.0-20240104205903-8429c7adb658/go.mod h1:R2WXwlYirhLAk/tnvuuvrzV3rsecpTNY1iqSJIcXaEo=
 github.com/pointlander/matrix v0.0.0-20240107215017-148d1b8c9624 h1:dL0dPxpi83XGhMbbbppnGkRjcfuSi1TsduWGBUQ7Yv0=
 github.com/pointlander/matrix v0.0.0-20240107215017-148d1b8c9624/go.mod h1:R2WXwlYirhLAk/tnvuuvrzV3rsecpTNY1iqSJIcXaEo=
+github.com/pointlander/matrix v0.0.0-20240109102235-0419bd76eafd h1:B8T/CbSQ1xDR3EVqkBEWjsMjCdlI6/AH0Cz+Dq+5V1Q=
+github.com/pointlander/matrix v0.0.0-20240109102235-0419bd76eafd/go.mod h1:uV0Qn/6rCMrIh+TFYFGRpVeesmHB/3GftLPXbJUDdqY=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
