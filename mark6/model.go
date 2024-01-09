@@ -170,7 +170,6 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 
 // Fire with embedding runs the network
 func (n *Net) FireEmbedding(value Matrix) (float32, Matrix, Matrix, Matrix) {
-	e := NewMatrix(0, n.Outputs, ModelSamples)
 	q := NewMatrix(0, n.Outputs, ModelSamples)
 	k := NewMatrix(0, n.Outputs, ModelSamples)
 	v := NewMatrix(0, n.Outputs, ModelSamples)
@@ -183,12 +182,11 @@ func (n *Net) FireEmbedding(value Matrix) (float32, Matrix, Matrix, Matrix) {
 		outputs := NewMatrix(0, n.Outputs, 1)
 		for j := range neurons {
 			out := MulT(neurons[j], value)
-			e.Data = append(e.Data, out.Data[0])
 			outputs.Data = append(outputs.Data, out.Data[0])
 		}
 		systemsE = append(systemsE, Sample{
 			Neurons: neurons,
-			Outputs: outputs,
+			Outputs: Sigmoid(outputs),
 		})
 	}
 	for i := 0; i < ModelSamples; i++ {
