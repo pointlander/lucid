@@ -20,6 +20,8 @@ import (
 )
 
 const (
+	// FFWindow is the feedfoward window
+	FFWindow = 64
 	// ModelWindow is the window size
 	ModelWindow = 128
 	// ModelSamples is the number of samples
@@ -352,8 +354,8 @@ func Mark6() {
 			}
 			in.Data[input[index]] = 1
 			entropy, q, k, v := net.FireEmbedding(in)
-			data[i] = v
-			fmt.Println(input[index], entropy, v.Data)
+			data[epoch] = v
+			fmt.Println(input[index], entropy)
 			if i == epochs-1 {
 				_, _, _, point := projection.Fire(Normalize(q), Normalize(k), Normalize(v))
 				points[index] = plotter.XY{X: float64(point.Data[0]), Y: float64(point.Data[1])}
@@ -383,5 +385,71 @@ func Mark6() {
 	err = p.Save(8*vg.Inch, 8*vg.Inch, "symbols_projection.png")
 	if err != nil {
 		panic(err)
+	}
+
+	rng := rand.New(rand.NewSource(1))
+	l1 := NewRandomMatrix(Outputs, Outputs)
+	b1 := NewRandomMatrix(Outputs, 1)
+	l2 := NewRandomMatrix(Outputs, Inputs)
+	b2 := NewRandomMatrix(Inputs, 1)
+	m := []RandomMatrix{l1, b1, l2, b2}
+	type Sample struct {
+		X    []Matrix
+		Cost float32
+	}
+	for e := 0; e < 256; e++ {
+		samples := make([]Sample, 512, 512)
+		for i := range samples {
+			for _, r := range m {
+				samples[i].X = append(samples[i].X, r.Sample(rng))
+			}
+			for j := range input {
+				target := NewMatrix(0, 256, 1)
+				target.Data = target.Data[:256]
+				if j+1 == len(input) {
+					target.Data[0] = 1
+				} else {
+					target.Data[input[j+1]] = 1
+				}
+				layer1 := Sigmoid(Add(MulT(samples[i].X[0], data[j]), samples[i].X[1]))
+				layer2 := Add(MulT(samples[i].X[2], layer1), samples[i].X[3])
+				cost := Quadratic(layer2, target)
+				samples[i].Cost += cost.Data[0]
+			}
+		}
+		sort.Slice(samples, func(i, j int) bool {
+			return samples[i].Cost < samples[j].Cost
+		})
+		fmt.Println(e, samples[0].Cost)
+		weights, sum := make([]float32, FFWindow), float32(0)
+		for i := range weights {
+			sum += 1 / samples[i].Cost
+			weights[i] = 1 / samples[i].Cost
+		}
+		for i := range weights {
+			weights[i] /= sum
+		}
+		for k := range m {
+			n := NewRandomMatrix(m[k].Cols, m[k].Rows)
+			for i := range n.Data {
+				n.Data[i].StdDev = 0
+			}
+			for i := range samples[:FFWindow] {
+				for j, value := range samples[i].X[k].Data {
+					n.Data[j].Mean += weights[i] * value
+				}
+			}
+			for i := range samples[:FFWindow] {
+				for j, value := range samples[i].X[k].Data {
+					diff := n.Data[j].Mean - value
+					n.Data[j].StdDev += weights[i] * diff * diff
+				}
+			}
+			for i := range n.Data {
+				n.Data[i].StdDev /= (FFWindow - 1.0) / FFWindow
+				n.Data[i].StdDev = float32(math.Sqrt(float64(n.Data[i].StdDev)))
+			}
+			m[k] = n
+		}
 	}
 }
