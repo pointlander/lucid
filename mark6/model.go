@@ -343,6 +343,7 @@ func Mark6() {
 	length := len(input)
 	const epochs = 1
 	points := make(plotter.XYs, len(input))
+	data := make([]Matrix, len(input))
 	for i := 0; i < epochs; i++ {
 		for epoch := 0; epoch < length; epoch++ {
 			index := epoch
@@ -351,6 +352,7 @@ func Mark6() {
 			}
 			in.Data[input[index]] = 1
 			entropy, q, k, v := net.FireEmbedding(in)
+			data[i] = v
 			fmt.Println(input[index], entropy, v.Data)
 			if i == epochs-1 {
 				_, _, _, point := projection.Fire(Normalize(q), Normalize(k), Normalize(v))
