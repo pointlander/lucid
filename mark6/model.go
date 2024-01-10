@@ -343,22 +343,21 @@ func Mark6() {
 	net := NewEmbeddingNet(1, Inputs, Outputs)
 	projection := NewNet(2, Outputs, 2)
 	length := len(input)
-	const epochs = 1
+	const epochs = 8
 	points := make(plotter.XYs, len(input))
 	data := make([]Matrix, len(input))
-	for i := 0; i < epochs; i++ {
-		for epoch := 0; epoch < length; epoch++ {
-			index := epoch
+	for e := 0; e < epochs; e++ {
+		for i := 0; i < length; i++ {
 			for j := range in.Data {
 				in.Data[j] = 0
 			}
-			in.Data[input[index]] = 1
+			in.Data[input[i]] = 1
 			entropy, q, k, v := net.FireEmbedding(in)
-			data[epoch] = v
-			fmt.Println(input[index], entropy)
-			if i == epochs-1 {
+			data[i] = v
+			fmt.Println(input[i], entropy)
+			if e == epochs-1 {
 				_, _, _, point := projection.Fire(Normalize(q), Normalize(k), Normalize(v))
-				points[index] = plotter.XY{X: float64(point.Data[0]), Y: float64(point.Data[1])}
+				points[i] = plotter.XY{X: float64(point.Data[0]), Y: float64(point.Data[1])}
 			} else {
 				projection.Fire(q, k, v)
 			}
@@ -397,8 +396,9 @@ func Mark6() {
 		X    []Matrix
 		Cost float32
 	}
+	var samples []Sample
 	for e := 0; e < 256; e++ {
-		samples := make([]Sample, 512, 512)
+		samples = make([]Sample, 512, 512)
 		for i := range samples {
 			for _, r := range m {
 				samples[i].X = append(samples[i].X, r.Sample(rng))
@@ -451,5 +451,22 @@ func Mark6() {
 			}
 			m[k] = n
 		}
+	}
+
+	for i := 0; i < length; i++ {
+		for j := range in.Data {
+			in.Data[j] = 0
+		}
+		in.Data[input[i]] = 1
+		_, _, _, v := net.FireEmbedding(in)
+		layer1 := Sigmoid(Add(MulT(samples[0].X[0], v), samples[0].X[1]))
+		layer2 := Add(MulT(samples[0].X[2], layer1), samples[0].X[3])
+		max, index := float32(0.0), 0
+		for key, value := range layer2.Data {
+			if value > max {
+				max, index = value, key
+			}
+		}
+		fmt.Println(string(input[i]), string(byte(index)))
 	}
 }
