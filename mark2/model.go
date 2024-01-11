@@ -14,7 +14,6 @@ import (
 	"github.com/pointlander/datum/iris"
 	. "github.com/pointlander/matrix"
 
-	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
@@ -461,12 +460,7 @@ func GMM(flowers []Iris) {
 			})
 			sample := samples[0]
 
-			in := make([]float64, len(sample.E[j].Data))
-			for k := range in {
-				in[k] = float64(sample.E[j].Data[k])
-			}
-			input := mat.NewDense(sample.E[j].Rows, sample.E[j].Cols, in)
-			d := mat.Det(input)
+			d, _ := Determinant(sample.E[j])
 			det := float32(d)
 			y := MulT(T(MulT(Sub(x, sample.U[j]), sample.E[j])), Sub(x, sample.U[j]))
 			pdf := math.Pow(2*math.Pi, -Embedding/2) *

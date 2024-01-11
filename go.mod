@@ -7,7 +7,6 @@ require (
 	github.com/pointlander/gradient v0.0.0-20230828203002-af1492b01f47
 	github.com/pointlander/matrix v0.0.0-20240109102235-0419bd76eafd
 	github.com/ziutek/blas v0.0.0-20190227122918-da4ca23e90bb
-	gonum.org/v1/gonum v0.14.0
 	gonum.org/v1/plot v0.14.0
 )
 
@@ -20,6 +19,7 @@ require (
 	github.com/go-pdf/fpdf v0.8.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/image v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
