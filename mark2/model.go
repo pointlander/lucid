@@ -129,8 +129,9 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 	}
 	weights, sum := make([]float32, ModelWindow), float32(0)
 	for i := range weights {
-		sum += 1 / systems[i].Entropy
-		weights[i] = 1 / systems[i].Entropy
+		value := math.Exp(-float64(systems[i].Entropy))
+		sum += float32(value)
+		weights[i] = float32(value)
 	}
 	for i := range weights {
 		weights[i] /= sum
@@ -352,7 +353,7 @@ func GMM(flowers []Iris) {
 				}
 				stddev /= float64(len(flowers))
 				stddev = math.Sqrt(stddev)
-				samples[j].C += 1 / stddev
+				samples[j].C += math.Exp(-stddev)
 			}
 		}
 
