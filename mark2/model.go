@@ -50,12 +50,12 @@ type Rand struct {
 	Count  float32
 }
 
-// Set is a set of statistics
-type Set [][]Random
+// XSet is a set of statistics
+type XSet [][]Random
 
-// NewStatistics generates a new statistics model
-func NewStatistics(inputs, outputs int) Set {
-	statistics := make(Set, outputs)
+// XNewStatistics generates a new statistics model
+func XNewStatistics(inputs, outputs int) XSet {
+	statistics := make(XSet, outputs)
 	for i := range statistics {
 		for j := 0; j < inputs; j++ {
 			statistics[i] = append(statistics[i], Random{
@@ -68,7 +68,7 @@ func NewStatistics(inputs, outputs int) Set {
 }
 
 // Sample samples from the statistics
-func (s Set) Sample(rng *rand.Rand, inputs, outputs int) []Matrix {
+func (s XSet) Sample(rng *rand.Rand, inputs, outputs int) []Matrix {
 	neurons := make([]Matrix, outputs)
 	for j := range neurons {
 		neurons[j] = NewMatrix(0, inputs, 1)
@@ -85,31 +85,31 @@ func (s Set) Sample(rng *rand.Rand, inputs, outputs int) []Matrix {
 	return neurons
 }
 
-// Net is a net
-type Net struct {
+// XNet is a net
+type XNet struct {
 	Inputs  int
 	Outputs int
 	Rng     *rand.Rand
-	Q       Set
-	K       Set
-	V       Set
+	Q       XSet
+	K       XSet
+	V       XSet
 }
 
-// NewNet makes a new network
-func NewNet(seed int64, inputs, outputs int) Net {
+// XNewNet makes a new network
+func XNewNet(seed int64, inputs, outputs int) XNet {
 	rng := rand.New(rand.NewSource(seed))
-	return Net{
+	return XNet{
 		Inputs:  inputs,
 		Outputs: outputs,
 		Rng:     rng,
-		Q:       NewStatistics(inputs, outputs),
-		K:       NewStatistics(inputs, outputs),
-		V:       NewStatistics(inputs, outputs),
+		Q:       XNewStatistics(inputs, outputs),
+		K:       XNewStatistics(inputs, outputs),
+		V:       XNewStatistics(inputs, outputs),
 	}
 }
 
-// Sample is a sample of a random neural network
-type Sample struct {
+// XSample is a sample of a random neural network
+type XSample struct {
 	Entropy float32
 	Neurons []Matrix
 	Outputs Matrix
@@ -117,8 +117,8 @@ type Sample struct {
 }
 
 // CalculateStatistics calculates the statistics of systems
-func (n Net) CalculateStatistics(systems []Sample) Set {
-	statistics := make(Set, n.Outputs)
+func (n XNet) CalculateStatistics(systems []XSample) XSet {
+	statistics := make(XSet, n.Outputs)
 	for i := range statistics {
 		for j := 0; j < n.Inputs; j++ {
 			statistics[i] = append(statistics[i], Random{
@@ -162,13 +162,13 @@ func (n Net) CalculateStatistics(systems []Sample) Set {
 }
 
 // Fire runs the network
-func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
+func (n *XNet) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 	q := NewMatrix(0, n.Outputs, ModelSamples)
 	k := NewMatrix(0, n.Outputs, ModelSamples)
 	v := NewMatrix(0, n.Outputs, ModelSamples)
-	systemsQ := make([]Sample, 0, 8)
-	systemsK := make([]Sample, 0, 8)
-	systemsV := make([]Sample, 0, 8)
+	systemsQ := make([]XSample, 0, 8)
+	systemsK := make([]XSample, 0, 8)
+	systemsV := make([]XSample, 0, 8)
 	for i := 0; i < ModelSamples; i++ {
 		neurons := n.Q.Sample(n.Rng, n.Inputs, n.Outputs)
 		outputs := NewMatrix(0, n.Outputs, 1)
@@ -177,7 +177,7 @@ func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 			q.Data = append(q.Data, out.Data[0])
 			outputs.Data = append(outputs.Data, out.Data[0])
 		}
-		systemsQ = append(systemsQ, Sample{
+		systemsQ = append(systemsQ, XSample{
 			Neurons: neurons,
 			Outputs: outputs,
 		})
@@ -190,7 +190,7 @@ func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 			k.Data = append(k.Data, out.Data[0])
 			outputs.Data = append(outputs.Data, out.Data[0])
 		}
-		systemsK = append(systemsK, Sample{
+		systemsK = append(systemsK, XSample{
 			Neurons: neurons,
 			Outputs: outputs,
 		})
@@ -203,7 +203,7 @@ func (n *Net) Fire(query, key, value Matrix) (float32, Matrix, Matrix, Matrix) {
 			v.Data = append(v.Data, out.Data[0])
 			outputs.Data = append(outputs.Data, out.Data[0])
 		}
-		systemsV = append(systemsV, Sample{
+		systemsV = append(systemsV, XSample{
 			Neurons: neurons,
 			Outputs: outputs,
 		})
@@ -242,20 +242,20 @@ type Iris struct {
 	Cluster   int
 }
 
-// GMM is a gaussian mixture model clustering algorithm
+// XGMM is a gaussian mixture model clustering algorithm
 // https://github.com/Ransaka/GMM-from-scratch
 // https://en.wikipedia.org/wiki/Multivariate_normal_distribution
-func GMM(flowers []Iris) {
+func XGMM(flowers []Iris) {
 	rng := rand.New(rand.NewSource(3))
 	type Cluster struct {
-		E Set
+		E XSet
 		U []Random
 	}
 	var Pi []Random
 	factor := float32(math.Sqrt(2.0 / float64(Embedding)))
 	clusters := [Clusters]Cluster{}
 	for i := range clusters {
-		clusters[i].E = make(Set, Embedding)
+		clusters[i].E = make(XSet, Embedding)
 		for j := range clusters[i].E {
 			row := make([]Random, Embedding)
 			for k := range row {
@@ -359,7 +359,7 @@ func GMM(flowers []Iris) {
 
 		aa := [Clusters]Cluster{}
 		for i := range aa {
-			aa[i].E = make(Set, Embedding)
+			aa[i].E = make(XSet, Embedding)
 			for j := range aa[i].E {
 				aa[i].E[j] = make([]Random, Embedding)
 			}
@@ -499,8 +499,8 @@ func Mark2() {
 		flowers[i].Iris = value
 		flowers[i].I = i
 	}
-	net := NewNet(1, Inputs+1, Outputs)
-	projection := NewNet(2, Outputs, 2)
+	net := XNewNet(1, Inputs+1, Outputs)
+	projection := XNewNet(2, Outputs, 2)
 	length := len(data.Fisher)
 	const epochs = 5
 	points := make(plotter.XYs, len(flowers))
@@ -547,7 +547,7 @@ func Mark2() {
 			}
 		}
 	}
-	GMM(flowers)
+	XGMM(flowers)
 
 	p := plot.New()
 	if err != nil {
