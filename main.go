@@ -97,9 +97,19 @@ func main() {
 		fmt.Println(multi.A.Data)
 	}
 
+	x, y, z := [8]float64{}, [8]float64{}, [8]float64{}
 	values := make(plotter.Values, 0, 1024)
-	for i := 0; i < 256; i++ {
-		values = append(values, rng.NormFloat64()+rng.NormFloat64()*rng.NormFloat64())
+	for i := 0; i < 8; i++ {
+		x[i] = rng.NormFloat64()
+		y[i] = rng.NormFloat64()
+		z[i] = rng.NormFloat64()
+	}
+	for _, x := range x {
+		for _, y := range y {
+			for _, z := range z {
+				values = append(values, x+y*z)
+			}
+		}
 	}
 	p := plot.New()
 	p.Title.Text = "distribution"
