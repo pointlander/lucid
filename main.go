@@ -17,7 +17,11 @@ import (
 	"github.com/pointlander/lucid/mark5"
 	"github.com/pointlander/lucid/mark6"
 	"github.com/pointlander/lucid/mark7"
+
 	. "github.com/pointlander/lucid/matrix"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
 )
 
 var (
@@ -37,6 +41,8 @@ var (
 	FlagMark6 = flag.Bool("mark6", false, "mark6 model")
 	// FlagMark7 is the mark7 model
 	FlagMark7 = flag.Bool("mark7", false, "mark7 model")
+	// FlagMulti multi mode
+	FlagMulti = flag.Bool("multi", false, "multi mode")
 )
 
 func main() {
@@ -70,22 +76,40 @@ func main() {
 
 	rng := rand.New(rand.NewSource(1))
 
-	data, err := iris.Load()
+	if *FlagMulti {
+		data, err := iris.Load()
+		if err != nil {
+			panic(err)
+		}
+
+		vars := make([][]float32, 4)
+		for i := range vars {
+			for j := range data.Fisher {
+				vars[i] = append(vars[i], float32(data.Fisher[j].Measures[i]))
+			}
+		}
+		multi := Factor(vars, true)
+
+		for i := 0; i < 8; i++ {
+			sample := multi.Sample(rng)
+			fmt.Println(sample)
+		}
+		fmt.Println(multi.A.Data)
+	}
+
+	values := make(plotter.Values, 0, 1024)
+	for i := 0; i < 256; i++ {
+		values = append(values, rng.NormFloat64()+rng.NormFloat64()*rng.NormFloat64())
+	}
+	p := plot.New()
+	p.Title.Text = "distribution"
+	histogram, err := plotter.NewHist(values, 256)
 	if err != nil {
 		panic(err)
 	}
-
-	vars := make([][]float32, 4)
-	for i := range vars {
-		for j := range data.Fisher {
-			vars[i] = append(vars[i], float32(data.Fisher[j].Measures[i]))
-		}
+	p.Add(histogram)
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "distribution.png")
+	if err != nil {
+		panic(err)
 	}
-	multi := Factor(vars, true)
-
-	for i := 0; i < 8; i++ {
-		sample := multi.Sample(rng)
-		fmt.Println(sample)
-	}
-	fmt.Println(multi.A.Data)
 }
