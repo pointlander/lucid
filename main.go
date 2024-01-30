@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math/cmplx"
 	"math/rand"
 
 	"github.com/pointlander/datum/iris"
@@ -121,5 +122,21 @@ func main() {
 	err = p.Save(8*vg.Inch, 8*vg.Inch, "distribution.png")
 	if err != nil {
 		panic(err)
+	}
+
+	d := []complex128{
+		cmplx.Exp(.1i),
+		cmplx.Exp(.4i),
+		cmplx.Exp(.5i),
+	}
+	sum := 0i
+	for _, value := range d {
+		fmt.Println(value, cmplx.Abs(value), cmplx.Phase(value))
+		sum += value
+	}
+	fmt.Println(sum, cmplx.Abs(sum), cmplx.Phase(sum))
+	for _, value := range d {
+		value /= sum
+		fmt.Println(value, cmplx.Abs(value), cmplx.Phase(value))
 	}
 }
